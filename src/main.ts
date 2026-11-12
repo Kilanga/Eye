@@ -234,10 +234,14 @@ document.querySelector('#app')!.innerHTML = `
           const d = p();
           return `<li><button type="button" class="sample" data-demo="${i}" aria-pressed="false"><strong>${esc(d.title.replace(' (synthetic)', ''))}</strong><span>${esc(d.description)}</span></button></li>`;
         }).join('')}</ul>
-        <p class="note">Or download Maya's sample files and import them like your own:
-          <button type="button" class="btn link" data-sample="csv">CSV</button>,
-          <button type="button" class="btn link" data-sample="pdf">PDF</button>,
-          <button type="button" class="btn link" data-sample="pdf-compact">PDF with an unusual layout</button>.</p>
+        <div class="sample-files">
+          <p class="note" id="sample-files-label">Or download Maya's files and import them like your own:</p>
+          <div class="sample-file-buttons" role="group" aria-labelledby="sample-files-label">
+            <button type="button" class="btn secondary small" data-sample="csv">CSV export</button>
+            <button type="button" class="btn secondary small" data-sample="pdf">PDF statement</button>
+            <button type="button" class="btn secondary small" data-sample="pdf-compact">PDF, unusual layout</button>
+          </div>
+        </div>
       </div>
       <ul class="accounts" id="accounts" aria-label="Statements added"></ul>
       <div id="import-notes"></div>
@@ -472,7 +476,8 @@ function renderClarify(): void {
           <p class="note">${esc(q.reason)}${q.guess ? ` Gemini Nano guessed ${esc(q.guess.replace(/_/g, ' '))}, without certainty.` : ''}</p>
           <div class="choices">${choices
             .map((c, j) => `<label class="choice"><input type="radio" name="q-${i}" value="${c.category}" data-key="${esc(q.key)}" ${j === 0 ? '' : ''} /> ${esc(c.label)}</label>`)
-            .join('')}<button type="button" class="btn link" data-skip="${esc(q.key)}">Skip</button></div>
+            .join('')}</div>
+          <button type="button" class="btn link skip-q" data-skip="${esc(q.key)}">Skip this one</button>
         </fieldset>`;
       })
       .join('')}
@@ -614,11 +619,11 @@ function renderPlan(): void {
   if (!p) return;
   const by = p.steps.some((s) => s.wording === 'cloud') ? 'Reworded by Gemini in the cloud; every figure was worked out on this device.' : 'Written on this device.';
   $('#plan').innerHTML = `<p><strong>${esc(p.summary)}</strong></p><p class="note">${by}</p>
-    <table class="plan"><caption class="sr-only">Your 90-day plan, week by week</caption><thead><tr><th scope="col">When</th><th scope="col">What to do</th><th scope="col">Why the lender cares</th></tr></thead><tbody>${p.steps
-      .map((x) => `<tr><td>Week ${x.week}</td><td>${esc(x.action)}</td><td>${esc(x.why)}</td></tr>`)
+    <table class="plan" role="table"><caption class="sr-only">Your 90-day plan, week by week</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">When</th><th scope="col" role="columnheader">What to do</th><th scope="col" role="columnheader">Why the lender cares</th></tr></thead><tbody role="rowgroup">${p.steps
+      .map((x) => `<tr role="row"><td role="cell" class="when">Week ${x.week}</td><td role="cell" class="what">${esc(x.action)}</td><td role="cell" class="why">${esc(x.why)}</td></tr>`)
       .join('')}
-    <tr class="milestone"><td>Weeks ${p.cleanFromWeek} to 12</td><td>Keep every statement clean: these are the months the lender will read.</td><td>Review again around day 30 and day 60.</td></tr>
-    <tr class="milestone"><td>Week 13</td><td>Review one last time, then apply.</td><td></td></tr></tbody></table>`;
+    <tr role="row" class="milestone"><td role="cell" class="when">Weeks ${p.cleanFromWeek} to 12</td><td role="cell" class="what">Keep every statement clean: these are the months the lender will read.</td><td role="cell" class="why">Review again around day 30 and day 60.</td></tr>
+    <tr role="row" class="milestone"><td role="cell" class="when">Week 13</td><td role="cell" class="what">Review one last time, then apply.</td><td role="cell" class="why"></td></tr></tbody></table>`;
   $<HTMLButtonElement>('#polish').disabled = !ai || !p.steps.length;
   $('#polish-note').textContent = !ai ? 'Needs the cloud connection.' : !ai.cloudEnabled ? 'Cloud wording is paused for now; the plan keeps its own wording.' : 'Sends the summary and the step names, never the figures.';
 }
