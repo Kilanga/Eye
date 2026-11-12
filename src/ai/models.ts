@@ -21,7 +21,7 @@ import {
 } from 'firebase/ai';
 import type { CloudProfile } from '../core/profile';
 import { finalisePlan, toCloudSteps, type DraftPlan, type FinalPlan, type PlanWording } from '../core/plan';
-import { assertSafeForCloud, type OutboundLedger } from '../core/ledger';
+import { assertSafeForCloud, type LedgerEntry, type OutboundLedger } from '../core/ledger';
 import { CATEGORIES, type Category, type DataOrigin, type Transaction } from '../core/types';
 import { interviewPrompt, classificationPrompt, letterPrompt, planPrompt } from './prompts';
 import { classificationJsonSchema, interviewSchema, letterSchema, planSchema, statementJsonSchema } from './schemas';
@@ -31,10 +31,12 @@ import {
   explanationPrompt,
   sanitiseQuestions,
   templateExplanation,
+  tidyExplanation,
   type Answer,
   type InterviewQuestion,
 } from '../core/interview';
 import { DEFAULT_SETTINGS, type AppSettings } from '../core/settings';
+import { fitsDirection } from '../core/direction';
 import { validateModelItems, type StatementOptions } from '../core/import/statement-text';
 
 /** Lines per on-device call: the local context window is small (about 4k tokens in). */
@@ -124,6 +126,18 @@ export class HybridAI {
     };
   }
 
+  /** Runs a cloud call and records in the ledger who answered, or that nothing came back. */
+  private async cloudCall<T extends { response: { inferenceSource?: string } }>(entry: LedgerEntry, call: () => Promise<T>): Promise<T> {
+    try {
+      const result = await call();
+      this.ledger.setSource(entry, result.response.inferenceSource);
+      return result;
+    } catch (err) {
+      this.ledger.setSource(entry, 'failed');
+      throw err;
+    }
+  }
+
   private requireCloud(): void {
     if (!this.settings.cloudEnabled) throw new Error('cloud features are paused in the app settings');
   }
@@ -188,21 +202,22 @@ export class HybridAI {
     for (let start = 0; start < txs.length; start += BATCH_SIZE) {
       const batch = txs.slice(start, start + BATCH_SIZE);
       const prompt = classificationPrompt(batch.map((t, i) => ({ i, label: t.rawLabel, amount: t.amount })), examples);
-      if (origin === 'demo') {
-        // Synthetic data may fall back to the cloud: log it so the ledger stays complete.
-        this.ledger.record('demo_classification', { lines: batch.length });
-      }
+      // Synthetic data may fall back to the cloud: logged before the call, kept only if it went there.
+      const entry = origin === 'demo' ? this.ledger.record('demo_classification', { lines: batch.length }) : undefined;
       const result = await model.generateContent(prompt);
       const source = result.response.inferenceSource === 'in_cloud' ? 'in_cloud' : 'on_device';
+      this.ledger.settle(entry, source);
       if (origin === 'user' && source !== 'on_device') {
         throw new Error('Refusing a cloud answer for user data.'); // defence in depth
       }
       for (const item of parseItems(result.response.text())) {
         const tx = batch[item.i];
         if (tx && !tx.category) {
-          tx.category = item.category;
+          // Code checks the model: a category that contradicts the sign of the amount is not kept.
+          const fits = fitsDirection(item.category, tx.amount);
+          tx.category = fits ? item.category : 'other';
           tx.categorySource = source;
-          tx.categoryConfidence = item.confidence;
+          tx.categoryConfidence = fits ? item.confidence : 'low';
         }
       }
       batch.filter((t) => !t.category).forEach((t) => {
@@ -223,8 +238,7 @@ export class HybridAI {
     const payload = { ...profile, steps };
     assertSafeForCloud(payload, rawLabels);
     const entry = this.ledger.record('plan', payload);
-    const result = await this.planner.generateContent(planPrompt(profile, steps));
-    this.ledger.setSource(entry, result.response.inferenceSource);
+    const result = await this.cloudCall(entry, () => this.planner.generateContent(planPrompt(profile, steps)));
     let wording: PlanWording | undefined;
     try {
       wording = JSON.parse(result.response.text()) as PlanWording;
@@ -240,8 +254,7 @@ export class HybridAI {
     const payload = { country: profile.country, flags };
     assertSafeForCloud(payload, rawLabels);
     const entry = this.ledger.record('letter_template', payload);
-    const result = await this.writer.generateContent(letterPrompt(profile.country, flags));
-    this.ledger.setSource(entry, result.response.inferenceSource);
+    const result = await this.cloudCall(entry, () => this.writer.generateContent(letterPrompt(profile.country, flags)));
     return JSON.parse(result.response.text()) as LetterTemplate;
   }
 
@@ -275,8 +288,9 @@ export class HybridAI {
 
   /** Turns a question into a structured query, on the device. The statements are not in the prompt. */
   async understandQuestion(question: string, months: string[], origin: DataOrigin): Promise<StatementQuery | null> {
-    if (origin === 'demo') this.ledger.record('demo_question', { characters: question.length });
+    const entry = origin === 'demo' ? this.ledger.record('demo_question', { characters: question.length }) : undefined;
     const result = await this.local.ask[origin].generateContent(queryPrompt(question, months));
+    this.ledger.settle(entry, result.response.inferenceSource);
     if (origin === 'user' && result.response.inferenceSource === 'in_cloud') throw new Error('Refusing a cloud answer for user data.');
     return sanitiseQuery(parseJson(result.response.text()), months);
   }
@@ -288,8 +302,7 @@ export class HybridAI {
     const payload = { ...profile };
     assertSafeForCloud(payload, rawLabels);
     const entry = this.ledger.record('interview', payload);
-    const result = await this.interviewer.generateContent(interviewPrompt(profile, flagged));
-    this.ledger.setSource(entry, result.response.inferenceSource);
+    const result = await this.cloudCall(entry, () => this.interviewer.generateContent(interviewPrompt(profile, flagged)));
     return sanitiseQuestions(parseJson(result.response.text()), flagged);
   }
 
@@ -300,11 +313,13 @@ export class HybridAI {
     currency: string,
     origin: DataOrigin,
   ): Promise<{ text: string; by: 'on_device' | 'in_cloud' | 'template' }> {
-    if (origin === 'demo') this.ledger.record('demo_explanation', { answers: answers.length });
+    const entry = origin === 'demo' ? this.ledger.record('demo_explanation', { answers: answers.length }) : undefined;
     const result = await this.local.explain[origin].generateContent(explanationPrompt(answers, flagged, currency));
+    this.ledger.settle(entry, result.response.inferenceSource);
     const by = result.response.inferenceSource === 'in_cloud' ? 'in_cloud' : 'on_device';
     if (origin === 'user' && by === 'in_cloud') throw new Error('Refusing a cloud answer for user data.');
-    const text = result.response.text().trim();
+    const text = tidyExplanation(result.response.text());
+    if (import.meta.env?.DEV && !checkExplanation(text, answers, flagged)) console.info('[dev] explanation not kept:', text);
     return checkExplanation(text, answers, flagged) ? { text, by } : { text: templateExplanation(answers), by: 'template' };
   }
 }

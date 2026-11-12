@@ -122,16 +122,43 @@ Crowd-sourcing "merchant → category" would make the app smarter for everyone, 
 
 ## Measurements
 
-The page `/eval.html` runs a labelled set of 198 statement lines (English and French) through the rules alone, then through rules + Gemini Nano with the user-data mode (`ONLY_ON_DEVICE`), and reports accuracy, time and bytes sent.
+The page `/eval.html` runs labelled statement lines (English and French) through the rules alone, then through rules + Gemini Nano in the user-data mode (`ONLY_ON_DEVICE`), and reports accuracy, time, bytes sent, and how many of the model's mistakes the app turns into a question for the user.
 
-| Run | Accuracy | On lines the rules miss | Rule coverage | Rule precision | Bytes sent |
+Measured on 12 Nov 2026 with Chrome 157 and Gemini Nano on a Windows desktop (24 cores, 32 GB RAM). Nano does not give the same answer twice, so each run is listed.
+
+**Main set** (198 lines, written with the rules; half on purpose with wording the rules do not cover):
+
+| Run | Accuracy | On lines the rules miss | Model mistakes turned into questions | Model time | Bytes sent |
 |---|---|---|---|---|---|
-| Rules only | 64.1% | - | 32.3% | 98.4% | 0 |
-| Rules + Gemini Nano | *to be measured on a machine with Nano* | | | | 0 |
+| Rules only | 64.1% | - | - | - | 0 |
+| Rules + Nano, first prompt (2 runs) | 74.2%, 78.3% | 62.7%, 68.7% | 5 of 42 | 39 s for 134 lines | 0 |
+| Rules + Nano, final (2 runs) | 80.3%, 81.8% | 71.6%, 73.9% | 6 of 35, 7 of 38 | 42 to 45 s for 134 lines | 0 |
+
+**Held-out set** (42 lines written after the first run on real hardware, with merchants and wording found nowhere in the rules, the main set or the prompt, never used for tuning):
+
+| Run | Accuracy | On lines the rules miss | Model mistakes turned into questions | Model time |
+|---|---|---|---|---|
+| Rules only | 47.6% | - | - | - |
+| Rules + Nano, first prompt | 83.3% | 76.0% | 0 of 6 | 13 s for 25 lines |
+| Rules + Nano, final (4 runs) | 81.0% to 85.7% | 72.0% to 80.0% | 1 to 4 of 5 to 7 | 8 s for 25 lines |
+
+What changed between the first prompt and the final one, and why:
+
+- **Each category is described in lender terms** in the prompt ([`src/ai/prompts.ts`](src/ai/prompts.ts)), with a rule that a payment that could be a debt is never "other". On the first run Nano answered "other" for rent, student loans and instalment plans: exactly the hidden debts a lender looks for. Words found in the held-out lines were kept out of these descriptions.
+- **Code checks the direction of the money** ([`src/core/direction.ts`](src/core/direction.ts)): a café bill read as income, or a deposit read as rent, is not kept; the line becomes a question. Nano made this mistake on real hardware.
+- **A model answer of "other" counts as unsure**, so it becomes a question instead of disappearing into everyday spending.
+
+The gain is clear on the main set (about +7 points on the lines the rules miss). On the held-out set, Nano was already good with the first prompt and the change stays within run-to-run variation: the prompt was not fitted to the main set, but it did not move the held-out score either.
+
+The other on-device tasks, checked on the same machine:
+
+- **PDF with an unusual layout**: 50 of 50 lines read by Nano in 37 s, each checked against the page.
+- **Questions in plain words**: "groceries each month" was first read by Nano as "utilities in October", and "payments to BrightHome" lost the merchant name. The words of the question now take precedence over the model's reading where they are clear ([`reconcileQuery`](src/core/ask.ts)); both questions are answered correctly, in about 2 s.
+- **Explanation paragraph**: Nano writes it in about 5 s. The check that rejects numbers the user did not give was too strict ("September 5th" against a line dated 2026-09-05) and is fixed; greetings, [placeholders] and minus signs added by the model are removed.
 
 PDF import: the sample statements are generated, rendered to PDF and read back in the tests ([`tests/pdf.test.ts`](tests/pdf.test.ts)): every line, date and total matches.
 
-Honest caveat: the same author wrote the keyword rules and the labelled set; about half the lines were written with wording the rules do not cover on purpose.
+Honest caveat: the same author wrote the keyword rules, both labelled sets and the prompt. The held-out set limits, but does not remove, that bias.
 
 ## Bank exports
 

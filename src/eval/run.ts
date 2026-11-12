@@ -1,6 +1,7 @@
 import { classifyByKeywords } from '../core/keywords';
 import type { Category, Transaction } from '../core/types';
 import type { EvalLine } from './dataset';
+import { isUnsure } from '../core/clarify';
 
 export interface EvalReport {
   lines: number;
@@ -14,7 +15,11 @@ export interface EvalReport {
   accuracyOnRest: number;
   modelMs?: number;
   modelLines?: number;
-  mistakes: { label: string; truth: Category; got: Category }[];
+  /** Lines the model answered wrongly. */
+  modelWrong?: number;
+  /** Of those, how many the app would turn into a question (low confidence or "other"). */
+  modelWrongAsked?: number;
+  mistakes: { label: string; truth: Category; got: Category; asked: boolean }[];
 }
 
 /** Classifies with the rules, then hands what is left to `model` (on-device Gemini Nano in the browser). */
@@ -48,6 +53,7 @@ export async function evaluate(
   const restPairs = txs.map((t, i) => ({ t, truth: set[i].truth })).filter((x) => restIds.has(x.t.id));
   const ok = (x: { t: Transaction; truth: Category }) => got(x.t) === x.truth;
   const all = txs.map((t, i) => ({ t, truth: set[i].truth }));
+  const modelWrong = model ? restPairs.filter((x) => !ok(x)) : [];
   return {
     lines: txs.length,
     ruleCoverage: ruled.length / txs.length,
@@ -56,6 +62,10 @@ export async function evaluate(
     accuracyOnRest: restPairs.filter(ok).length / Math.max(restPairs.length, 1),
     modelMs,
     modelLines: model ? rest.length : undefined,
-    mistakes: all.filter((x) => !ok(x)).map((x) => ({ label: x.t.rawLabel, truth: x.truth, got: got(x.t) })),
+    modelWrong: model ? modelWrong.length : undefined,
+    modelWrongAsked: model ? modelWrong.filter((x) => isUnsure(x.t)).length : undefined,
+    mistakes: all
+      .filter((x) => !ok(x))
+      .map((x) => ({ label: x.t.rawLabel, truth: x.truth, got: got(x.t), asked: restIds.has(x.t.id) && isUnsure(x.t) })),
   };
 }

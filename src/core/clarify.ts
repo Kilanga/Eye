@@ -59,7 +59,9 @@ export interface Question {
 /** A line the app is unsure about: not recognised, or a low-confidence model answer. */
 export function isUnsure(t: Transaction): boolean {
   if (t.isInternalTransfer || t.categorySource === 'rule' || t.categorySource === 'user') return false;
-  return t.categorySource === 'unclassified' || t.categoryConfidence === 'low' || !t.category;
+  // A model that answers "other" could not tell: worth a question, since a missed debt changes the ratio.
+  const modelOther = (t.categorySource === 'on_device' || t.categorySource === 'in_cloud') && t.category === 'other';
+  return t.categorySource === 'unclassified' || t.categoryConfidence === 'low' || !t.category || modelOther;
 }
 
 export function groupKey(t: Transaction): string {
