@@ -84,7 +84,8 @@ The request carries no user data: a random install ID created by Firebase, the a
 - **Plan**: code decides the steps and computes the figures ("cut $141 a month or aim for housing at $1,709"). The cloud only receives the step names and must use `{{placeholders}}`; wording with a digit or a foreign placeholder is rejected ([`src/core/plan.ts`](src/core/plan.ts)).
 - **PDF reading**: each line returned by Nano is kept only if its amount and its words are on the page ([`validateModelItems`](src/core/import/statement-text.ts)).
 - **Questions**: Nano produces a JSON query constrained by a schema; code runs it ([`src/core/ask.ts`](src/core/ask.ts)).
-- **Explanation**: a paragraph that brings a number found neither in the answers nor in the flagged lines is replaced by the user's own words ([`checkExplanation`](src/core/interview.ts)).
+- **Explanation**: a paragraph that brings a number found neither in the answers nor in the flagged lines, or that is written from the lender's side ("your mother"), is replaced by the user's own words ([`checkExplanation`](src/core/interview.ts)).
+- **A model's guess never clears a lender check.** Only the built-in rules or the user's own answer can. On real hardware Gemini Nano read Maya's $6,000 mobile deposit as salary and her furniture instalment plan as housing, which made both flags disappear. Now a large deposit read by a model stays a deposit to explain and becomes the first question to the user, and a fixed monthly payment a model calls "housing" or "shopping" is still offered as a possible debt ([`isModelGuess`](src/core/clarify.ts), [`tests/model-guess.test.ts`](tests/model-guess.test.ts)).
 
 ## Accessibility and design
 
@@ -216,13 +217,17 @@ Without Firebase configuration the app runs in **offline demo mode**: rules only
 
 ### Gemini Nano in Chrome
 
-Open `chrome://on-device-internals` to see the model state, then click **Prepare private mode** in the app (the download must start from a click). Chrome needs about 22 GB of free disk space and either a GPU with more than 4 GB of video memory or 16 GB of RAM.
+Use Chrome on desktop, version 139 or later. If the model is not offered, turn on `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input` and restart Chrome. Open `chrome://on-device-internals` to see the model state, then click **Download the on-device model** in the app (the download must start from a click). Chrome needs about 22 GB of free disk space and either a GPU with more than 4 GB of video memory or 16 GB of RAM. Tested on Chrome 157 on Windows.
+
+Without Gemini Nano, the sample files still go through the whole flow (the cloud stands in for the on-device model, and every such call is listed in the ledger); your own statements are then read by the built-in rules only.
 
 ## Limits
 
 - Rules for two countries only; thresholds are public rules of thumb, not a lender's decision.
 - PDF: text PDFs only (no scanned images). Classic table layouts are read by code; other layouts need Gemini Nano.
 - Gemini Nano's context is about 4k tokens: PDF pages and lines are processed in small chunks.
+- The cloud runs on the free tier of the Gemini Developer API. Its terms ask developers not to send personal information to unpaid services, which this design respects (rounded numbers and check names only). A public launch to users in the European Economic Area, Switzerland or the UK would need the paid tier, which the Gemini API terms require there.
+- Web only for now. An Android version (Gemini Nano through Firebase AI Logic) could reuse the rules and the privacy design; the TypeScript core would need porting.
 
 ## License
 

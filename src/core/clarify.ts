@@ -56,6 +56,11 @@ export interface Question {
   guess?: Category;
 }
 
+/** The category was guessed by a model, not set by the built-in rules or by the user. */
+export function isModelGuess(t: Transaction): boolean {
+  return t.categorySource === 'on_device' || t.categorySource === 'in_cloud';
+}
+
 /** A line the app is unsure about: not recognised, or a low-confidence model answer. */
 export function isUnsure(t: Transaction): boolean {
   if (t.isInternalTransfer || t.categorySource === 'rule' || t.categorySource === 'user') return false;
@@ -75,7 +80,10 @@ export function groupKey(t: Transaction): string {
 export function pickQuestions(transactions: Transaction[], monthlyIncome: number, max = 6): Question[] {
   const groups = new Map<string, Transaction[]>();
   for (const t of transactions) {
-    if (!isUnsure(t)) continue;
+    // A large deposit is always worth a question when only a model read it: if it is not income,
+    // the lender will ask where it came from.
+    const largeGuess = isModelGuess(t) && t.amount > 0 && monthlyIncome > 0 && t.amount > 0.5 * monthlyIncome;
+    if (!isUnsure(t) && !largeGuess) continue;
     const k = groupKey(t);
     if (!k.split(':')[1]) continue;
     groups.set(k, [...(groups.get(k) ?? []), t]);
@@ -119,7 +127,9 @@ export function pickQuestions(transactions: Transaction[], monthlyIncome: number
 
 /** Applies an answer to every unsure line of the same merchant and direction. Returns the lines changed. */
 export function applyAnswer(transactions: Transaction[], key: string, category: Category): Transaction[] {
-  const changed = transactions.filter((t) => isUnsure(t) && groupKey(t) === key);
+  // Any line the user has not answered and the rules did not set: unsure lines, and lines a model
+  // guessed (a large deposit is asked about even when the model was confident).
+  const changed = transactions.filter((t) => (isUnsure(t) || isModelGuess(t)) && groupKey(t) === key);
   changed.forEach((t) => {
     t.category = category;
     t.categorySource = 'user';

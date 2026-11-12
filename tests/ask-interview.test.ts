@@ -126,3 +126,12 @@ describe('explanation check', () => {
     expect(checkExplanation('I pay my car loan of 400 USD on September 5th.', answers, flagged)).toBe(false);
   });
 });
+
+describe('explanation voice', () => {
+  it("rejects a paragraph written from the lender's side, as Gemini Nano wrote one on real hardware", async () => {
+    const { checkExplanation } = await import('../src/core/interview');
+    const answers = [{ checkId: 'large_deposits', question: 'Deposit?', answer: 'A gift from my mother.' }] as never;
+    expect(checkExplanation("I've reviewed your recent account activity. The deposit was described as a gift from your mother.", answers, [])).toBe(false);
+    expect(checkExplanation('The deposit was a gift from my mother for the down payment.', answers, [])).toBe(true);
+  });
+});

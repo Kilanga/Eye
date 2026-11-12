@@ -61,7 +61,9 @@ export class HybridAI {
   private local!: Record<'pdf' | 'ask' | 'explain', Record<DataOrigin, GenerativeModel>>;
 
   constructor(app: FirebaseApp, private ledger: OutboundLedger, settings: AppSettings = DEFAULT_SETTINGS) {
-    this.ai = getAI(app, { backend: new GoogleAIBackend() });
+    // Limited-use App Check tokens: each cloud request carries a fresh token, ready for replay
+    // protection (production checklist).
+    this.ai = getAI(app, { backend: new GoogleAIBackend(), useLimitedUseAppCheckTokens: true });
     this.configure(settings);
   }
 

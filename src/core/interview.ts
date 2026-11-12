@@ -67,7 +67,8 @@ export interface Answer extends InterviewQuestion {
 /** The on-device prompt. Contains real data: it is only ever sent to Gemini Nano. */
 export function explanationPrompt(answers: Answer[], flagged: Transaction[], currency: string): string {
   return [
-    'Write one paragraph (at most 120 words, first person, polite, factual) for a lender, explaining the items below.',
+    'You are the applicant, writing to your lender. Write one paragraph (at most 120 words, polite, factual) explaining the items below.',
+    'Write as the applicant, in the first person: "I received", "my mother". Never call the applicant "you".',
     'It goes inside a letter that already has a greeting and a signature: no "Dear", no sign-off, no [brackets].',
     'Include every fact from the applicant answers, in particular where money came from. Write amounts without a minus sign.',
     'Use ONLY the facts given. Do not invent dates, amounts, names or reasons. English.',
@@ -102,8 +103,11 @@ export function tidyExplanation(text: string): string {
 /** A paragraph from the model is kept only if it does not bring numbers that are in neither the answers nor the lines. */
 export function checkExplanation(text: string, answers: Answer[], flagged: Transaction[]): boolean {
   if (!text.trim() || text.length > 1200) return false;
+  // Written by the applicant: a text that calls the applicant "you" was written from the
+  // lender's side (Gemini Nano did this on real hardware).
+  if ((text.match(/\b(you|your|you've|you're)\b/gi) ?? []).length > 1) return false;
   const known = new Set(
-    [...answers.map((a) => a.answer), ...flagged.map((t) => `${t.date} ${Math.abs(t.amount)} ${Math.abs(t.amount).toFixed(2)}`)]
+    [...answers.map((a) => a.answer), ...flagged.map((t) => `${t.date} ${Math.abs(t.amount)} ${Math.abs(t.amount).toFixed(2)} ${t.rawLabel}`)]
       .join(' ')
       .match(/\d+/g) ?? [],
   );

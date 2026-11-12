@@ -1,3 +1,4 @@
+import { isModelGuess } from './clarify';
 import { pl } from './text';
 import { findRecurringObligations, isCounted } from './recurring';
 import type { RulePack } from './rules/types';
@@ -68,8 +69,8 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       ? external.filter(
           (t) =>
             t.amount > share * incomeBase &&
-            t.category !== 'income_salary' &&
-            t.category !== 'internal_transfer' &&
+            // A model's guess never clears a check: only the rules or the user can say it is pay.
+            (isModelGuess(t) || (t.category !== 'income_salary' && t.category !== 'internal_transfer')) &&
             // For self-employed borrowers, client payments are the income itself.
             !(pack.incomeBasis === 'deposits' && t.category === 'income_other'),
         )
