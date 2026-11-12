@@ -110,7 +110,8 @@ When the rules do not recognise a line, or Gemini Nano classifies it with low co
 - **The answer applies at once** to every line with the same name, the review is recomputed and the change in ratio and checks is announced to screen readers.
 - **Learning, level 1: personal rules.** If the user ticks "Remember my answers on this browser", the merchant is stored as a SHA-256 fingerprint of its normalised name and direction, never as text. Next review, those lines are read before the model is called (source: "Your answers").
 - **Learning, level 2: the on-device prompt.** The answers of the session become few-shot examples in the Gemini Nano prompt, so a similar line (another contractor, another client) is read better. They stay in memory and only ever go to the on-device model; user answers are never mixed with demo data.
-- **Answers cannot hide a risk.** Only lines the app was unsure about can be answered; a line the rules flag (betting, payday loan, overdraft fee) is not editable, and a large deposit stays flagged whatever it is called. The lender still sees the real statement.
+- **The user has the last word on what a model guessed.** In "Every line, and who read it", any line Gemini Nano read (or the user answered) has a "What is this?" choice; the change applies to every line of the same name and the review is recomputed.
+- **Answers cannot hide a risk.** Lines read by the built-in rules (betting, payday loan, overdraft fee...) cannot be relabelled, and a large deposit stays flagged whatever it is called. The lender still sees the real statement.
 
 ### Why not a shared merchant database in the cloud?
 

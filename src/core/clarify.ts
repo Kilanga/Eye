@@ -61,6 +61,18 @@ export function isModelGuess(t: Transaction): boolean {
   return t.categorySource === 'on_device' || t.categorySource === 'in_cloud';
 }
 
+/**
+ * Lines the user may correct: anything a model guessed or could not read, and their own earlier
+ * answers. Lines set by the built-in rules stay as they are: the rules are right 98% of the time
+ * on the evaluation set, and the lender reads those lines the same way (a betting or overdraft
+ * line cannot be relabelled away).
+ */
+export function isCorrectable(t: Transaction): boolean {
+  if (t.categorySource === 'rule') return false;
+  if (t.isInternalTransfer && t.categorySource !== 'user') return false;
+  return true;
+}
+
 /** A line the app is unsure about: not recognised, or a low-confidence model answer. */
 export function isUnsure(t: Transaction): boolean {
   if (t.isInternalTransfer || t.categorySource === 'rule' || t.categorySource === 'user') return false;
@@ -127,14 +139,12 @@ export function pickQuestions(transactions: Transaction[], monthlyIncome: number
 
 /** Applies an answer to every unsure line of the same merchant and direction. Returns the lines changed. */
 export function applyAnswer(transactions: Transaction[], key: string, category: Category): Transaction[] {
-  // Any line the user has not answered and the rules did not set: unsure lines, and lines a model
-  // guessed (a large deposit is asked about even when the model was confident).
-  const changed = transactions.filter((t) => (isUnsure(t) || isModelGuess(t)) && groupKey(t) === key);
+  const changed = transactions.filter((t) => isCorrectable(t) && groupKey(t) === key);
   changed.forEach((t) => {
     t.category = category;
     t.categorySource = 'user';
     t.categoryConfidence = 'high';
-    if (category === 'internal_transfer') t.isInternalTransfer = true;
+    t.isInternalTransfer = category === 'internal_transfer' ? true : undefined;
   });
   return changed;
 }
