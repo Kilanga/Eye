@@ -30,10 +30,10 @@ describe('local 90-day plan', () => {
     expect(draft.cleanFromWeek).toBe(5); // US: the last 2 months are read
   });
 
-  it('has no step when every light is green', async () => {
+  it('has no step when everything is clear', async () => {
     const { draft } = await run(frClean());
     expect(draft.steps).toHaveLength(0);
-    expect(finalisePlan(draft).summary).toMatch(/green/);
+    expect(finalisePlan(draft).summary).toMatch(/Everything is clear/);
   });
 
   it('works offline with local wording and real figures', async () => {

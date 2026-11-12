@@ -1,3 +1,4 @@
+import { pl } from './text';
 import { CATEGORIES, type Category, type Transaction } from './types';
 
 /**
@@ -120,19 +121,19 @@ export function runQuery(query: StatementQuery, txs: Transaction[], currency: st
   let sentence: string;
   switch (query.intent) {
     case 'count':
-      sentence = `${matches.length} transaction(s).`;
+      sentence = `${pl(matches.length, 'transaction')}.`;
       break;
     case 'monthly_average':
-      sentence = `${money(total / (query.month ? 1 : months))} per month on average (${matches.length} transaction(s)).`;
+      sentence = `${money(total / (query.month ? 1 : months))} per month on average (${pl(matches.length, 'transaction')}).`;
       break;
     case 'largest':
       sentence = sorted[0] ? `The largest is ${money(Math.abs(sorted[0].amount))} on ${sorted[0].date}: ${sorted[0].rawLabel}.` : 'No matching transaction.';
       break;
     case 'list':
-      sentence = `${matches.length} transaction(s), ${money(total)} in total.`;
+      sentence = `${pl(matches.length, 'transaction')}, ${money(total)} in total.`;
       break;
     default:
-      sentence = `${money(total)} in ${matches.length} transaction(s).`;
+      sentence = `${money(total)} in ${pl(matches.length, 'transaction')}.`;
   }
   if (matches.length === 0) sentence = 'No matching transaction in these statements.';
   return { sentence, understood, transactions: query.intent === 'largest' ? sorted.slice(0, 1) : sorted.slice(0, 50) };

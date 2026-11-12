@@ -20,7 +20,7 @@ describe('ask your statements', () => {
       'USD',
       'en-US',
     );
-    expect(r.sentence).toBe('$70.00 in 2 transaction(s).');
+    expect(r.sentence).toBe('$70.00 in 2 transactions.');
     const largest = runQuery({ intent: 'largest', direction: 'in', categories: [], month: '2026-10', text: '' }, txs, 'USD', 'en-US');
     expect(largest.sentence).toContain('$6,000.00');
   });

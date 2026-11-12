@@ -1,3 +1,4 @@
+import { pl } from './text';
 import type { RulePack } from './rules/types';
 import type { Analysis, CheckId, CheckStatus, UserInputs } from './types';
 
@@ -82,31 +83,31 @@ export const DEFAULT_TEXT: Record<LeverId, { action: string; why: string }> = {
   },
   overdraft_buffer: {
     action: 'Set an automatic transfer from savings when the balance runs low, and turn on low-balance alerts.',
-    why: '{{overdraft_events}} overdraft event(s) are visible; every clean month replaces one.',
+    why: 'Lenders see {{overdraft_events}} on your statements; every clean month pushes them out of view.',
   },
   document_deposits: {
-    action: 'Gather proof of where the money came from for the {{large_deposit_count}} large deposit(s), {{large_deposit_total}} in total.',
+    action: 'Gather proof of where the money came from: {{large_deposit_count}}, {{large_deposit_total}} in total.',
     why: 'Underwriters ask for a paper trail on every unexplained deposit; having it ready saves weeks.',
   },
   stop_gambling: {
     action: 'Stop gambling payments from the accounts you will show (about {{gambling_monthly}} per month today).',
-    why: '{{gambling_count}} gambling line(s) are visible, and lenders notice even small amounts.',
+    why: 'Lenders see {{gambling_count}}, and they notice even small amounts.',
   },
   exit_short_term_credit: {
     action: 'Repay and close the short-term loans before the statements you will submit begin.',
-    why: '{{payday_count}} quick-loan line(s) read as a cash-flow warning.',
+    why: 'Lenders read {{payday_count}} as a cash-flow warning.',
   },
   review_obligations: {
-    action: 'Tell the app which of the {{obligations_pending}} recurring payment(s) are credit, and keep the contracts at hand.',
+    action: 'Say what each regular payment is ({{obligations_pending}} to review), and keep the contracts at hand.',
     why: 'Lenders count instalment plans and leases as debt even when the statement does not say loan.',
   },
   document_cash: {
-    action: 'Stop depositing cash before you apply, and note where the {{cash_count}} cash deposit(s) ({{cash_total}}) came from.',
+    action: 'Stop depositing cash before you apply, and note where the {{cash_count}} ({{cash_total}}) came from.',
     why: 'Cash cannot be traced, so lenders may leave it out of the funds you can use.',
   },
   refresh_statements: {
     action: 'Download the latest statements of every account, every page, with no missing month.',
-    why: 'Your last line is {{statement_age_days}} days old; lenders want statements within {{freshness_days}} days of the application.',
+    why: 'Your last line is {{statement_age_days}} old; lenders want statements from the last {{freshness_days}} days.',
   },
   build_funds: {
     action: 'Set aside the {{funds_gap}} still missing, in an account you will show, at least two statements before you apply.',
@@ -114,7 +115,7 @@ export const DEFAULT_TEXT: Record<LeverId, { action: string; why: string }> = {
   },
   regular_savings: {
     action: 'Set up a standing monthly transfer to savings, even a small one.',
-    why: 'Savings show in {{savings_months}} of {{months_required}} months; regular beats large and occasional.',
+    why: 'Savings show in {{savings_months}} of {{months_required}} months; small and regular beats large and occasional.',
   },
 };
 
@@ -181,21 +182,21 @@ export function buildDraftPlan(analysis: Analysis, pack: RulePack, inputs: UserI
         };
       }
       case 'overdraft_buffer':
-        return { overdraft_events: String(m.overdraftFeeCount + m.nsfCount) };
+        return { overdraft_events: pl(m.overdraftFeeCount + m.nsfCount, 'overdraft or returned-payment fee') };
       case 'document_deposits':
-        return { large_deposit_count: String(m.largeDepositCount), large_deposit_total: money(m.largeDepositTotal) };
+        return { large_deposit_count: pl(m.largeDepositCount, 'large deposit'), large_deposit_total: money(m.largeDepositTotal) };
       case 'stop_gambling':
-        return { gambling_count: String(m.gamblingCount), gambling_monthly: money(m.gamblingMonthly) };
+        return { gambling_count: pl(m.gamblingCount, 'gambling payment'), gambling_monthly: money(m.gamblingMonthly) };
       case 'exit_short_term_credit':
-        return { payday_count: String(m.paydayCount) };
+        return { payday_count: pl(m.paydayCount, 'quick-loan payment') };
       case 'regular_savings':
         return { savings_months: String(m.savingsMonths), months_required: String(m.monthsCovered) };
       case 'review_obligations':
-        return { obligations_pending: String(m.obligationsPending) };
+        return { obligations_pending: pl(m.obligationsPending, 'payment') };
       case 'document_cash':
-        return { cash_count: String(m.cashDepositCount), cash_total: money(m.cashDepositTotal) };
+        return { cash_count: pl(m.cashDepositCount, 'cash deposit'), cash_total: money(m.cashDepositTotal) };
       case 'refresh_statements':
-        return { statement_age_days: String(m.statementAgeDays), freshness_days: String(pack.freshnessDays ?? 45) };
+        return { statement_age_days: pl(m.statementAgeDays, 'day'), freshness_days: String(pack.freshnessDays ?? 45) };
       case 'build_funds':
         return {
           funds_gap: money(Math.max(0, (inputs.cashToClose ?? 0) - (m.availableFunds ?? 0))),
@@ -240,9 +241,9 @@ function fill(text: string, values: Record<string, string>): string {
 }
 
 const DEFAULT_SUMMARY_ALL_OK =
-  'Every check is green. Keep the next statements as clean as these, then apply.';
+  'Everything is clear. Keep the next statements as clean as these, then apply.';
 const DEFAULT_SUMMARY =
-  'Fix the red lights first, then keep every new statement clean: those are the months the lender will read.';
+  'Start with what is marked Fix first, then keep every new statement clean: those are the months the lender will read.';
 
 /** Merges the (optional) cloud wording into the local draft and fills in the real figures. */
 export function finalisePlan(draft: DraftPlan, wording?: PlanWording): FinalPlan {

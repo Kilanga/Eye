@@ -1,3 +1,4 @@
+import { pl } from './text';
 import { findRecurringObligations, isCounted } from './recurring';
 import type { RulePack } from './rules/types';
 import type {
@@ -136,7 +137,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       id: 'statement_coverage',
       status: monthsCovered >= pack.statementMonths ? 'ok' : 'watch',
       title: 'Statement coverage',
-      detail: `${monthsCovered} month(s) imported; lenders usually ask for ${pack.statementMonths}, for every account.`,
+      detail: `${pl(monthsCovered, 'month')} of statements; lenders usually ask for ${pack.statementMonths}, for every account.`,
       transactionIds: [],
     }),
     debt_ratio: () => {
@@ -162,7 +163,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
         detail:
           n === 0 && negativeBalanceTxs.length === 0
             ? 'No overdraft fee or returned payment in the period.'
-            : `${overdraftTxs.length} overdraft fee(s), ${nsfTxs.length} returned payment(s), ${negativeBalanceTxs.length} negative balance line(s).`,
+            : [pl(overdraftTxs.length, 'overdraft fee'), pl(nsfTxs.length, 'returned payment'), pl(negativeBalanceTxs.length, 'day', 'days') + ' with a negative balance'].filter((x) => !x.startsWith('0 ')).join(', ') + '.',
         transactionIds: [...overdraftTxs, ...nsfTxs, ...negativeBalanceTxs].map((t) => t.id),
       };
     },
@@ -173,7 +174,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       detail:
         largeDepositTxs.length === 0
           ? 'No non-salary deposit above the threshold.'
-          : `${largeDepositTxs.length} deposit(s) above ${Math.round((share ?? 0) * 100)}% of monthly qualifying income (${fmtMoney((share ?? 0) * incomeBase)}): the lender will ask where the money came from.`,
+          : `${pl(largeDepositTxs.length, 'deposit')} above ${Math.round((share ?? 0) * 100)}% of monthly qualifying income (${fmtMoney((share ?? 0) * incomeBase)}): the lender will ask where the money came from.`,
       transactionIds: largeDepositTxs.map((t) => t.id),
     }),
     gambling: () => {
@@ -181,31 +182,31 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       return {
         id: 'gambling',
         status: gamblingTxs.length === 0 ? 'ok' : heavy ? 'alert' : 'watch',
-        title: 'Gambling transactions',
+        title: 'Gambling',
         detail:
           gamblingTxs.length === 0
             ? 'None in the period.'
-            : `${gamblingTxs.length} transaction(s), about ${fmtMoney(metrics.gamblingMonthly)} per month. Lenders notice even small amounts.`,
+            : `${pl(gamblingTxs.length, 'gambling payment')}, about ${fmtMoney(metrics.gamblingMonthly)} per month. Lenders notice even small amounts.`,
         transactionIds: gamblingTxs.map((t) => t.id),
       };
     },
     payday_loans: () => ({
       id: 'payday_loans',
       status: paydayTxs.length === 0 ? 'ok' : 'alert',
-      title: 'Short-term high-cost credit',
-      detail: paydayTxs.length === 0 ? 'None in the period.' : `${paydayTxs.length} payday or quick-loan transaction(s).`,
+      title: 'Payday and quick loans',
+      detail: paydayTxs.length === 0 ? 'None in the period.' : `${pl(paydayTxs.length, 'payday or quick-loan payment')}.`,
       transactionIds: paydayTxs.map((t) => t.id),
     }),
     recurring_obligations: () => ({
       id: 'recurring_obligations',
       status: obligationsPending === 0 ? 'ok' : 'watch',
-      title: 'Recurring payments that may be credit',
+      title: 'Regular payments that may be debts',
       detail:
         obligations.length === 0
           ? 'No recurring payment that looks like hidden credit.'
           : obligationsPending === 0
-            ? `${obligations.length} recurring payment(s) reviewed; ${fmtMoney(obligationsMonthly)} per month counted as debt.`
-            : `${obligationsPending} recurring payment(s) a lender may count as debt. Confirm or dismiss each one below.`,
+            ? `${pl(obligations.length, 'regular payment')} reviewed; ${fmtMoney(obligationsMonthly)} per month counted as debt.`
+            : `${pl(obligationsPending, 'regular payment')} a lender may count as debt. Say below what each one is.`,
       transactionIds: obligations.flatMap((o) => o.transactionIds),
     }),
     cash_deposits: () => ({
@@ -213,7 +214,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       status: cashTxs.length === 0 ? 'ok' : 'watch',
       title: 'Cash deposits',
       detail: cashTxs.length
-        ? `${cashTxs.length} cash deposit(s), ${fmtMoney(metrics.cashDepositTotal)} in total. Cash cannot be traced: lenders may not count it toward the funds you need.`
+        ? `${pl(cashTxs.length, 'cash deposit')}, ${fmtMoney(metrics.cashDepositTotal)} in total. Cash cannot be traced: lenders may not count it toward the funds you need.`
         : 'No cash deposit in the period.',
       transactionIds: cashTxs.map((t) => t.id),
     }),
@@ -228,8 +229,8 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
           statementAgeDays > limit
             ? `The last line is ${statementAgeDays} days old; statements must be dated within ${limit} days of the application. Download the latest ones.`
             : gaps.length
-              ? `Missing month(s): ${gaps.slice(0, 3).join('; ')}. Lenders want consecutive statements, every page.`
-              : `Consecutive months, last line ${statementAgeDays} day(s) before the application date.`,
+              ? `Missing: ${gaps.slice(0, 3).join('; ')}. Lenders want consecutive statements, every page.`
+              : `No missing month; the last line is ${pl(statementAgeDays, 'day')} old.`,
         transactionIds: [],
       };
     },
@@ -254,7 +255,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
         detail:
           left < 0
             ? `Balances total ${fmtMoney(availableFunds)}; ${fmtMoney(-left)} short of the ${fmtMoney(need)} needed at closing.`
-            : `Balances total ${fmtMoney(availableFunds)}: after ${fmtMoney(need)} at closing, ${reserves.toFixed(1)} month(s) of housing payments remain in reserve. Three or more is a recognised strength.`,
+            : `Balances total ${fmtMoney(availableFunds)}: after ${fmtMoney(need)} at closing, ${reserves.toFixed(1)} months of housing payments remain in reserve. Three or more is a recognised strength.`,
         transactionIds: [],
       };
     },
@@ -262,7 +263,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       id: 'savings_regularity',
       status: savingsMonthSet.size >= monthsCovered ? 'ok' : 'watch',
       title: 'Regular savings',
-      detail: `Money set aside in ${savingsMonthSet.size} of ${monthsCovered} month(s). Small but regular beats large and occasional.`,
+      detail: `Money set aside in ${savingsMonthSet.size} of ${pl(monthsCovered, 'month')}. Small but regular beats large and occasional.`,
       transactionIds: [],
     }),
   };

@@ -8,7 +8,7 @@ export const US: RulePack = {
   displayName: 'United States - conventional mortgage guidelines',
   statementMonths: 2,
   incomeBasis: 'gross',
-  debtRatio: { label: 'DTI (back-end)', comfort: 0.36, reference: 0.43, max: 0.5 },
+  debtRatio: { label: 'Debt-to-income ratio', comfort: 0.36, reference: 0.43, max: 0.5 },
   largeDepositShareOfMonthlyIncome: 0.5,
   freshnessDays: 45,
   checks: [
@@ -58,7 +58,7 @@ export const US_FHA: RulePack = {
   ...US,
   program: 'fha',
   displayName: 'United States - FHA (government-insured) guidelines',
-  debtRatio: { label: 'DTI (FHA)', comfort: 0.43, reference: 0.47, max: 0.5 },
+  debtRatio: { label: 'Debt-to-income ratio', comfort: 0.43, reference: 0.47, max: 0.5 },
   checkNotes: {
     overdraft: 'FHA: a returned-payment (NSF) fee can send the file to manual underwriting, even after an automated approval.',
     debt_ratio: 'FHA standard ratios are 31% (housing) and 43% (total); up to 47% or 50% with documented compensating factors such as 3+ months of reserves.',
@@ -75,7 +75,7 @@ export const US_VA: RulePack = {
   ...US,
   program: 'va',
   displayName: 'United States - VA (veterans) guidelines',
-  debtRatio: { label: 'DTI (VA)', comfort: 0.41, reference: 0.41, max: 0.5 },
+  debtRatio: { label: 'Debt-to-income ratio', comfort: 0.41, reference: 0.41, max: 0.5 },
   checkNotes: {
     debt_ratio: 'VA: 41% is a benchmark, not a cap. Above it, residual income must exceed the VA guideline by 20%.',
     overdraft: 'VA lenders ask for a letter explaining every overdraft or negative balance.',
@@ -99,7 +99,7 @@ export const US_BANK_STATEMENT: RulePack = {
   statementMonths: 12,
   incomeBasis: 'deposits',
   defaultExpenseRatio: 0.5,
-  debtRatio: { label: 'DTI (bank statement loan)', comfort: 0.43, reference: 0.5, max: 0.55 },
+  debtRatio: { label: 'Debt-to-income ratio', comfort: 0.43, reference: 0.5, max: 0.55 },
   checkNotes: {
     debt_ratio: 'Income = eligible deposits per month, minus the expense ratio for a business account. A lower ratio needs a CPA or third-party expense letter.',
   },
