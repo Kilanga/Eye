@@ -1,0 +1,123 @@
+1
+00:00:00,350 --> 00:00:07,228
+When you apply for a mortgage, someone at the bank goes through two months of your statements, line by line.
+
+2
+00:00:07,228 --> 00:00:11,240
+A big deposit they can't trace, an overdraft fee, a casino bet.
+
+3
+00:00:11,240 --> 00:00:15,380
+Most people only find out what got flagged after they've applied.
+
+4
+00:00:16,180 --> 00:00:21,213
+So I built Underwriter's Eye. It does the same review in Chrome, before you apply.
+
+5
+00:00:21,213 --> 00:00:26,184
+Gemini Nano reads the statements on your own computer, through Firebase AI Logic.
+
+6
+00:00:26,184 --> 00:00:29,130
+The cloud model only gets a few rounded numbers.
+
+7
+00:00:29,930 --> 00:00:32,920
+Here's Maya, a sample applicant in Austin.
+
+8
+00:00:32,920 --> 00:00:38,973
+My rules handle most of her lines, and Nano picks up the eleven they don't recognise.
+
+9
+00:00:38,973 --> 00:00:42,960
+With real statements, that part never leaves the device.
+
+10
+00:00:43,760 --> 00:00:48,937
+If a line could change the outcome and Nano isn't sure, the app just asks.
+
+11
+00:00:48,937 --> 00:00:52,225
+Here it thought this $6,000 deposit was income.
+
+12
+00:00:52,225 --> 00:00:55,093
+I don't let a model's guess clear a flag,
+
+13
+00:00:55,093 --> 00:00:59,430
+so it stays flagged until Maya says where the money came from.
+
+14
+00:01:00,230 --> 00:01:03,796
+Now the report, the way an underwriter would see it.
+
+15
+00:01:03,796 --> 00:01:07,088
+One thing to fix, four things they'll ask about.
+
+16
+00:01:07,088 --> 00:01:11,340
+The slider shows how her debt ratio moves with a cheaper home.
+
+17
+00:01:12,140 --> 00:01:15,203
+The 90-day plan is worked out on the device:
+
+18
+00:01:15,203 --> 00:01:18,475
+cut $141 a month, or keep housing under $1,700.
+
+19
+00:01:18,475 --> 00:01:23,140
+Gemini in the cloud can reword it, but it never sees those numbers,
+
+20
+00:01:23,140 --> 00:01:26,690
+and if it writes a digit, I throw the wording away.
+
+21
+00:01:27,490 --> 00:01:34,440
+The cloud model also asks the questions an underwriter would probably ask, from the summary alone.
+
+22
+00:01:35,240 --> 00:01:37,454
+Maya's answers stay on the laptop.
+
+23
+00:01:37,454 --> 00:01:43,444
+Nano turns them into a paragraph, and the code checks it didn't add anything she didn't say.
+
+24
+00:01:43,444 --> 00:01:49,630
+The letter template comes from the cloud with blanks, and names and amounts are filled in here.
+
+25
+00:01:50,430 --> 00:01:53,631
+She can also just ask her statements a question.
+
+26
+00:01:53,631 --> 00:01:57,700
+Nano works out what she means, and the app does the counting.
+
+27
+00:01:58,500 --> 00:02:01,180
+If you don't want to take my word for it,
+
+28
+00:02:01,180 --> 00:02:05,560
+this panel shows every request that left the device, byte for byte.
+
+29
+00:02:05,560 --> 00:02:11,770
+App Check protects the calls, and Remote Config lets me switch the cloud off without an update.
+
+30
+00:02:12,570 --> 00:02:17,280
+Two months later, Maya runs it again. Everything's green.
+
+31
+00:02:18,080 --> 00:02:25,430
+That's Underwriter's Eye. It's live at underwriters-eye.web.app, and the code is on GitHub.
