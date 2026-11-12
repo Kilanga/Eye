@@ -78,7 +78,7 @@ export async function runPipeline(
           t.category = 'other';
           t.categorySource = 'unclassified';
         });
-        notes.push(`The model could not classify ${txs.length} line(s) (${(err as Error).message.slice(0, 120)}). The rules' answer is shown.`);
+        notes.push(modelFailureNote(txs.length, err));
       }
     }
   } else {
@@ -92,4 +92,17 @@ export async function runPipeline(
   const sources: Record<CategorySource, number> = { rule: 0, user: 0, on_device: 0, in_cloud: 0, unclassified: 0 };
   all.forEach((t) => sources[t.categorySource ?? 'unclassified']++);
   return { ...analyze(accounts, pack, inputs), sources, notes };
+}
+
+/** A plain sentence for the user when the model could not read some lines: never the raw SDK error. */
+export function modelFailureNote(count: number, err: unknown): string {
+  const lines = count === 1 ? 'One line was' : `${count} lines were`;
+  const m = String((err as Error)?.message ?? err);
+  const offline = (typeof navigator !== 'undefined' && navigator.onLine === false) || /Failed to fetch|NetworkError|network error|ERR_INTERNET_DISCONNECTED/i.test(m);
+  const why = offline
+    ? 'You are offline, and without Gemini Nano on this computer the sample files need the cloud model.'
+    : /\b(429|500|502|503|504)\b|overloaded|high demand|quota|exhausted/i.test(m)
+      ? 'The cloud model is busy right now.'
+      : 'The model did not answer.';
+  return `${lines} not read by a model. ${why} The built-in rules' answer is shown, and the app asks you about the lines that matter.`;
 }

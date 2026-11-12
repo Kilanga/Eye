@@ -64,7 +64,21 @@ describe('model failure', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const a = await runPipeline(p.accounts, getRulePack('US'), { grossMonthlyIncome: 6400, projectedHousingPayment: 1850 }, failing as any);
     expect(a.checks.length).toBeGreaterThan(0);
-    expect(a.notes.join(' ')).toContain('network down');
+    expect(a.notes.join(' ')).toMatch(/lines were not read by a model\. The model did not answer\./);
     expect(a.sources.unclassified).toBeGreaterThan(0);
+  });
+});
+
+describe('when the model cannot read lines', () => {
+  it('explains it in plain words, never with the raw SDK error', async () => {
+    const { modelFailureNote } = await import('../src/pipeline');
+    const offline = modelFailureNote(11, new Error('[AI/fetch-error]: Error fetching from https://firebasevertexai.googleapis.com/v1beta/projects/x/models/y:generateContent: Failed to fetch'));
+    expect(offline).toMatch(/^11 lines were not read by a model\. You are offline/);
+    expect(offline).not.toMatch(/https|fetch|AI\//);
+    expect(modelFailureNote(1, new Error('[503 ] The model is overloaded'))).toMatch(/^One line was .* busy/);
+    // An HTTP refusal is not being offline.
+    const refused = modelFailureNote(3, new Error('[AI/fetch-error]: Error fetching from https://firebasevertexai.googleapis.com/x: [403 ] Requests from referer are blocked.'));
+    expect(refused).toMatch(/The model did not answer\./);
+    expect(refused).not.toMatch(/offline|https/);
   });
 });

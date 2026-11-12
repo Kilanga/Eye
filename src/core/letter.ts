@@ -21,3 +21,15 @@ export function fillTemplate(
 export function listPlaceholders(template: string): string[] {
   return [...new Set([...template.matchAll(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi)].map((m) => m[1]))];
 }
+
+/**
+ * A cloud template is used only if the applicant's paragraph has a clean place to go:
+ * {{explanation}} exactly once, alone on its line. Gemini once returned it three times,
+ * mid-sentence ("Regarding my debt ratio, {{explanation}}. Concerning the overdraft, ..."),
+ * which pasted the same paragraph three times into broken sentences.
+ */
+export function isUsableTemplate(template: string): boolean {
+  const slots = template.match(/\{\{\s*explanation\s*\}\}/gi) ?? [];
+  if (slots.length !== 1) return false;
+  return template.split('\n').some((line) => /^\s*\{\{\s*explanation\s*\}\}\s*$/i.test(line));
+}

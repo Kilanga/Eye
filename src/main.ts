@@ -22,7 +22,7 @@ import { importOfx } from './core/import/ofx';
 import { chunkLines, guessYear, lineText, parseWithLayout } from './core/import/statement-text';
 import { defaultQuestions, LOCAL_LETTER_TEMPLATE, templateExplanation, type Answer, type InterviewQuestion } from './core/interview';
 import { OutboundLedger } from './core/ledger';
-import { fillTemplate, listPlaceholders } from './core/letter';
+import { fillTemplate, isUsableTemplate, listPlaceholders } from './core/letter';
 import { buildDraftPlan, finalisePlan, toCloudSteps, type DraftPlan, type FinalPlan } from './core/plan';
 import { buildCloudProfile, type CloudProfile } from './core/profile';
 import { getRulePack, PROGRAMS_BY_COUNTRY } from './core/rules';
@@ -491,7 +491,7 @@ function renderClarify(): void {
         const meta = `${q.count === 1 ? 'one line' : `${q.count} lines`}, ${money(q.total, 2)} ${q.direction === 'in' ? 'received' : 'paid'}${q.months > 1 ? ` over ${q.months} months` : ''}`;
         return `<fieldset class="question-set" data-key="${esc(q.key)}">
           <legend><span class="label">${esc(q.exampleLabel)}</span><span class="note"> ${esc(meta)}</span></legend>
-          <p class="note">${esc(q.reason)}${q.guess ? ` Gemini Nano guessed ${esc(q.guess.replace(/_/g, ' '))}, without certainty.` : ''}</p>
+          <p class="note">${esc(q.reason)}${q.guess ? ` ${q.guessBy === 'in_cloud' ? 'The cloud model' : 'Gemini Nano'} guessed ${esc(CATEGORY_NAMES[q.guess].toLowerCase())}, without certainty.` : ''}</p>
           <div class="choices">${choices
             .map((c, j) => `<label class="choice"><input type="radio" name="q-${i}" value="${c.category}" data-key="${esc(q.key)}" ${j === 0 ? '' : ''} /> ${esc(c.label)}</label>`)
             .join('')}</div>
@@ -559,7 +559,7 @@ function renderFindings(): void {
           <h3><span>${esc(c.title)}</span></h3>
           <p>${esc(c.detail)}</p>
           ${step ? `<p class="next"><strong>Week ${step.week}:</strong> ${esc(step.action)}</p>` : ''}
-          ${txs.length ? `<details><summary>See the ${txs.length} line${txs.length > 1 ? 's' : ''}</summary>${linesTable(txs.slice(0, 40), flagged, `Lines for ${c.title}`, false)}</details>` : ''}
+          ${txs.length ? `<details><summary>See the ${txs.length} line${txs.length > 1 ? 's' : ''}</summary><div class="scroll" tabindex="0" role="region" aria-label="Lines for ${esc(c.title)}">${linesTable(txs.slice(0, 40), flagged, `Lines for ${c.title}`, false)}</div></details>` : ''}
         </div></li>`;
     })
     .join('');
@@ -1173,7 +1173,7 @@ $('#write-explanation').addEventListener('click', async () => {
     try {
       if (ai && navigator.onLine && state.profile) {
         const t = await ai.generateLetterTemplate(state.profile, labels());
-        if (t.template.includes('{{explanation}}')) {
+        if (isUsableTemplate(t.template)) {
           template = t.template;
           tby = 'Letter drafted by Gemini in the cloud, with blanks only.';
         }
@@ -1230,7 +1230,10 @@ async function ask(question: string): Promise<void> {
     if (ai && (origin() === 'demo' || state.device === 'available')) {
       query = await ai.understandQuestion(question, months, origin());
       if (query) query = reconcileQuery(query, guessQuery(question, months, labels));
-      by = 'Understood by Gemini Nano, checked against the words of your question, and counted on this device.';
+      by =
+        state.device === 'available'
+          ? 'Understood by Gemini Nano, checked against the words of your question, and counted on this device.'
+          : 'Understood by Gemini in the cloud (sample files only), checked against the words of your question, and counted on this device.';
     }
   } catch {
     query = null;
