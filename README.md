@@ -210,7 +210,11 @@ Without Firebase configuration the app runs in **offline demo mode**: rules only
 ### Firebase setup
 
 1. Create a Firebase project and a Web app; enable **Firebase AI Logic** with the Gemini Developer API.
-2. Enable **App Check** with reCAPTCHA Enterprise; register a debug token for localhost.
+2. Enable **App Check** with reCAPTCHA Enterprise. List only the hosted domains on the reCAPTCHA key (not `localhost`, as the Firebase guide asks) and register a debug token for local development.
+   Then, following the [Firebase AI Logic production checklist](https://firebase.google.com/docs/ai-logic/production-checklist):
+   - restrict the browser API key to the app's addresses (`https://<project>.web.app/*`, `https://<project>.firebaseapp.com/*`, `http://localhost:5173/*`), keeping Firebase's API restrictions;
+   - turn on **AI monitoring** in AI Logic settings (it only ever sees the cloud calls, which carry the summary profile);
+   - the app already requests limited-use App Check tokens, ready for replay protection.
 3. Optional: in **Remote Config**, add `cloud_model`, `cloud_enabled` and `clarify_max_questions` (see above) and publish. Without a template the defaults apply.
 4. Copy `.env.example` to `.env.local` and fill it in.
 5. `npm run build && npx firebase-tools deploy --only hosting`.
