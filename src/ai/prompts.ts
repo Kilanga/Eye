@@ -80,8 +80,9 @@ export function letterPrompt(country: CountryCode, flags: string[]): string {
   return [
     `Write ${kind}, in English, covering these items: ${flags.join(', ')}.`,
     'Use ONLY placeholders in double curly braces for every personal detail, for example',
-    '{{applicant_name}}, {{date}}, {{deposit_amount}}, {{deposit_date}}, {{deposit_source}}. It MUST contain {{explanation}} once,',
-    'where the applicant\'s own explanation paragraph will be inserted on their device.',
+    '{{applicant_name}}, {{date}}, {{deposit_amount}}, {{deposit_date}}, {{deposit_source}}.',
+    'The applicant\'s own paragraph already explains every item. Put {{explanation}} exactly ONCE, alone on its own line,',
+    'between an opening sentence and a closing sentence. Do not write a sentence per item around it.',
     'Never invent names, amounts or dates. Keep it under 180 words, polite and factual.',
     'Return JSON: {"template": "...", "placeholders": ["..."]}.',
   ].join('\n');

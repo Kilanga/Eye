@@ -54,6 +54,8 @@ export interface Question {
   reason: string;
   /** What the model guessed, if anything. */
   guess?: Category;
+  /** Which model made that guess: Gemini Nano, or the cloud standing in for it on sample files. */
+  guessBy?: 'on_device' | 'in_cloud';
 }
 
 /** The category was guessed by a model, not set by the built-in rules or by the user. */
@@ -117,7 +119,8 @@ export function pickQuestions(transactions: Transaction[], monthlyIncome: number
       score *= 3;
       reason = 'A regular payment: the lender will want to know if it is a debt.';
     }
-    const guesses = txs.map((t) => t.category).filter((c): c is Category => !!c && c !== 'other');
+    const guessed = txs.filter((t) => isModelGuess(t) && t.category && t.category !== 'other');
+    const guesses = guessed.map((t) => t.category as Category);
     return {
       key,
       direction,
@@ -127,7 +130,7 @@ export function pickQuestions(transactions: Transaction[], monthlyIncome: number
       months,
       total: Math.round(total * 100) / 100,
       reason,
-      ...(guesses[0] ? { guess: guesses[0] } : {}),
+      ...(guesses[0] ? { guess: guesses[0], guessBy: guessed[0].categorySource === 'in_cloud' ? ('in_cloud' as const) : ('on_device' as const) } : {}),
       score,
     };
   });

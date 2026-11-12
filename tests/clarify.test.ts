@@ -120,3 +120,15 @@ describe('correcting lines in the full table', () => {
     expect(t.category).toBe('gambling');
   });
 });
+
+describe('who guessed a line', () => {
+  it('says the cloud guessed when the cloud stood in for Gemini Nano', async () => {
+    const { pickQuestions } = await import('../src/core/clarify');
+    const line = (id: string, date: string, source: 'on_device' | 'in_cloud') =>
+      ({ id, accountId: 'a', date, amount: -59.47, currency: 'USD', country: 'US', rawLabel: 'MEGAMART ONLINE ORDER', category: 'groceries', categorySource: source, categoryConfidence: 'low' }) as never;
+    const [cloudQ] = pickQuestions([line('1', '2026-09-19', 'in_cloud'), line('2', '2026-10-19', 'in_cloud')], 6400, 6);
+    expect(cloudQ.guessBy).toBe('in_cloud');
+    const [nanoQ] = pickQuestions([line('1', '2026-09-19', 'on_device'), line('2', '2026-10-19', 'on_device')], 6400, 6);
+    expect(nanoQ.guessBy).toBe('on_device');
+  });
+});
