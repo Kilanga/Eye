@@ -156,11 +156,13 @@ export class HybridAI {
     txs: Transaction[],
     origin: DataOrigin,
     onProgress?: (done: number, total: number) => void,
+    /** The user's own answers, as few-shot examples. Only ever put in an on-device prompt for user data. */
+    examples: { label: string; amount: number; category: string }[] = [],
   ): Promise<void> {
     const model = origin === 'user' ? this.classifierLocal : this.classifierDemo;
     for (let start = 0; start < txs.length; start += BATCH_SIZE) {
       const batch = txs.slice(start, start + BATCH_SIZE);
-      const prompt = classificationPrompt(batch.map((t, i) => ({ i, label: t.rawLabel, amount: t.amount })));
+      const prompt = classificationPrompt(batch.map((t, i) => ({ i, label: t.rawLabel, amount: t.amount })), examples);
       if (origin === 'demo') {
         // Synthetic data may fall back to the cloud: log it so the ledger stays complete.
         this.ledger.record('demo_classification', { lines: batch.length });
@@ -175,6 +177,7 @@ export class HybridAI {
         if (tx && !tx.category) {
           tx.category = item.category;
           tx.categorySource = source;
+          tx.categoryConfidence = item.confidence;
         }
       }
       batch.filter((t) => !t.category).forEach((t) => {
@@ -286,15 +289,15 @@ function parseJson<T = unknown>(text: string): T | null {
   }
 }
 
-function parseItems(text: string): { i: number; category: Category }[] {
+function parseItems(text: string): { i: number; category: Category; confidence: 'high' | 'low' }[] {
   try {
     const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) as {
-      items?: { i?: unknown; category?: unknown }[];
+      items?: { i?: unknown; category?: unknown; confidence?: unknown }[];
     };
-    return (json.items ?? []).filter(
-      (x): x is { i: number; category: Category } =>
-        typeof x.i === 'number' && CATEGORIES.includes(x.category as Category),
-    );
+    return (json.items ?? [])
+      .filter((x): x is { i: number; category: Category } => typeof x.i === 'number' && CATEGORIES.includes(x.category as Category))
+      // A missing confidence counts as low: better to ask than to guess.
+      .map((x) => ({ i: x.i, category: x.category, confidence: (x as { confidence?: unknown }).confidence === 'high' ? 'high' : 'low' }));
   } catch {
     return [];
   }

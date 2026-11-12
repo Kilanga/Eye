@@ -1012,3 +1012,67 @@ footer {
     padding: 0;
   }
 }
+
+/* ---------------------------------------------------------------- questions about unsure lines */
+.c-user {
+  background: var(--ink);
+}
+.clarify {
+  border: 2px solid var(--mark);
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  margin: 0 0 1.5rem;
+  background: #fffdf2;
+}
+.clarify h3 {
+  margin-top: 0;
+}
+.question-set {
+  border-top: 1px solid var(--rule);
+  padding: 0.9rem 0 0.5rem;
+  margin: 0;
+}
+.question-set legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 0.25rem;
+}
+.question-set legend .label {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+.question-set p {
+  clear: both;
+  margin: 0.2rem 0 0.5rem;
+}
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.choice:hover {
+  border-color: var(--pen);
+}
+.choice:has(input:checked) {
+  border: 2px solid var(--pen);
+  background: #eef2fb;
+}
+.choice input {
+  accent-color: var(--pen);
+  width: 1.05rem;
+  height: 1.05rem;
+}
