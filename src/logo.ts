@@ -1,0 +1,2 @@
+/** The wordmark's icon: a statement with one highlighted line. */
+export const LOGO = `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="22" height="26" rx="2" fill="#fff" stroke="currentColor" stroke-width="2"/><path d="M9 10h14M9 15h14M9 20h9" stroke="currentColor" stroke-width="2"/><path d="M8 14h16v3H8z" fill="#ffe066" opacity=".9"/><path d="M9 15h14" stroke="currentColor" stroke-width="2"/></svg>`;

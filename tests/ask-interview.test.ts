@@ -135,3 +135,34 @@ describe('explanation voice', () => {
     expect(checkExplanation('The deposit was a gift from my mother for the down payment.', answers, [])).toBe(true);
   });
 });
+
+describe('explanation paragraph from the answers only', () => {
+  const answers = [
+    { checkId: 'overdraft' as const, question: 'What caused the recent overdraft events?', answer: 'Two small overdrafts in September when my paycheck was a day late. I now keep a $500 buffer.' },
+    { checkId: 'large_deposits' as const, question: 'Where did the funds for the large deposit come from?', answer: 'My mother gave me $6,000 toward the down payment.' },
+  ];
+
+  it('keeps an amount the user wrote with a thousands separator (Gemini Nano, Nov 2026)', async () => {
+    const { checkExplanation } = await import('../src/core/interview');
+    const nano =
+      'In September, I experienced two small overdrafts when my paycheck was a day late. I now keep a $500 buffer. The large deposit came from my mother, who gave me a gift of $6,000 towards the down payment.';
+    expect(checkExplanation(nano, answers, [])).toBe(true);
+    expect(checkExplanation(nano.replace('$6,000', '6000 USD'), answers, [])).toBe(true);
+    expect(checkExplanation(nano.replace('$6,000', '$7,000'), answers, [])).toBe(false);
+  });
+
+  it('sends the answers to Gemini Nano, not the statement lines', async () => {
+    const { explanationPrompt } = await import('../src/core/interview');
+    const prompt = explanationPrompt(answers);
+    expect(prompt).toContain('My mother gave me $6,000');
+    expect(prompt).toContain('add none');
+    expect(prompt).not.toMatch(/Flagged lines|AUTO LOAN|OVERDRAFT FEE/);
+  });
+});
+
+describe('category names in the interface', () => {
+  it('has a readable name for every category', async () => {
+    const { CATEGORIES, CATEGORY_NAMES } = await import('../src/core/types');
+    for (const c of CATEGORIES) expect(CATEGORY_NAMES[c]).toMatch(/^[A-Z]/);
+  });
+});

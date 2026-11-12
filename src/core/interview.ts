@@ -65,17 +65,15 @@ export interface Answer extends InterviewQuestion {
 }
 
 /** The on-device prompt. Contains real data: it is only ever sent to Gemini Nano. */
-export function explanationPrompt(answers: Answer[], flagged: Transaction[], currency: string): string {
+export function explanationPrompt(answers: Answer[]): string {
+  // Only the applicant's own answers: given the flagged lines too, Gemini Nano narrated all of
+  // them and invented links between them ("the deposit resolved the overdraft").
   return [
-    'You are the applicant, writing to your lender. Write one paragraph (at most 120 words, polite, factual) explaining the items below.',
-    'Write as the applicant, in the first person: "I received", "my mother". Never call the applicant "you".',
-    'It goes inside a letter that already has a greeting and a signature: no "Dear", no sign-off, no [brackets].',
-    'Include every fact from the applicant answers, in particular where money came from. Write amounts without a minus sign.',
-    'Use ONLY the facts given. Do not invent dates, amounts, names or reasons. English.',
-    'Flagged lines:',
-    ...flagged.slice(0, 12).map((t) => `- ${t.date} ${t.rawLabel} ${t.amount.toFixed(2)} ${currency}`),
-    'Applicant answers:',
-    ...answers.filter((a) => a.answer.trim()).map((a) => `- ${a.question} ${a.answer.trim()}`),
+    'You are the applicant. Rewrite your own answers below as one paragraph for your lender (at most 120 words, polite, factual, first person).',
+    'Keep every fact from the answers and add none: no new dates, amounts, names, reasons or events. Do not mention anything the answers do not mention.',
+    'Never call the applicant "you". No greeting, no sign-off, no [brackets]. Write amounts without a minus sign. English.',
+    'Answers:',
+    ...answers.filter((a) => a.answer.trim()).map((a) => `- Question: ${a.question}\n  Answer: ${a.answer.trim()}`),
   ].join('\n');
 }
 
@@ -106,15 +104,17 @@ export function checkExplanation(text: string, answers: Answer[], flagged: Trans
   // Written by the applicant: a text that calls the applicant "you" was written from the
   // lender's side (Gemini Nano did this on real hardware).
   if ((text.match(/\b(you|your|you've|you're)\b/gi) ?? []).length > 1) return false;
+  // "$6,000" in an answer and "6000" or "6,000" in the text are the same number.
+  const joinThousands = (s: string) => s.replace(/(\d)[,\s.\u00a0\u202f](?=\d{3}\b)/g, '$1');
   const known = new Set(
-    [...answers.map((a) => a.answer), ...flagged.map((t) => `${t.date} ${Math.abs(t.amount)} ${Math.abs(t.amount).toFixed(2)} ${t.rawLabel}`)]
+    [...answers.map((a) => joinThousands(a.answer)), ...flagged.map((t) => `${t.date} ${Math.abs(t.amount)} ${Math.abs(t.amount).toFixed(2)} ${t.rawLabel}`)]
       .join(' ')
       .match(/\d+/g) ?? [],
   );
   // Compare without leading zeros on both sides: "2026-09-05" in a line, "September 5th" in the text.
   const bare = (n: string) => n.replace(/^0+(?=\d)/, '');
   const knownBare = new Set([...known].map(bare));
-  const plain = text.replace(/(\d)[,\s.\u00a0\u202f](?=\d{3}\b)/g, '$1');
+  const plain = joinThousands(text);
   return (plain.match(/\d+/g) ?? []).every((n) => known.has(n) || knownBare.has(bare(n)));
 }
 
