@@ -56,3 +56,15 @@ describe('cloud profile', () => {
     expect(profile.housingPaymentBucket % 250).toBe(0);
   });
 });
+
+describe('model failure', () => {
+  it('keeps the analysis going with the rules when the model throws', async () => {
+    const p = usAlmostReady();
+    const failing = { classifyTransactions: async () => { throw new Error('network down'); } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const a = await runPipeline(p.accounts, getRulePack('US'), { grossMonthlyIncome: 6400, projectedHousingPayment: 1850 }, failing as any);
+    expect(a.checks.length).toBeGreaterThan(0);
+    expect(a.notes.join(' ')).toContain('network down');
+    expect(a.sources.unclassified).toBeGreaterThan(0);
+  });
+});

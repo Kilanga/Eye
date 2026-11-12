@@ -61,7 +61,17 @@ export async function runPipeline(
         );
         continue;
       }
-      await ai.classifyTransactions(txs, origin, (done, total) => onProgress({ stage: 'model', done, total }));
+      try {
+        await ai.classifyTransactions(txs, origin, (done, total) => onProgress({ stage: 'model', done, total }));
+      } catch (err) {
+        // A model failure (network, quota, model not ready) must never stop the analysis:
+        // the rules' answer stands and the user is told.
+        txs.filter((t) => !t.category).forEach((t) => {
+          t.category = 'other';
+          t.categorySource = 'unclassified';
+        });
+        notes.push(`The model could not classify ${txs.length} line(s) (${(err as Error).message.slice(0, 120)}). The rules' answer is shown.`);
+      }
     }
   } else {
     remaining.forEach((t) => {
