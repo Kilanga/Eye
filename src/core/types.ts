@@ -37,7 +37,7 @@ export const CATEGORIES = [
 export type Category = (typeof CATEGORIES)[number];
 
 /** Who decided the category of a transaction. */
-export type CategorySource = 'rule' | 'on_device' | 'in_cloud' | 'unclassified';
+export type CategorySource = 'rule' | 'user' | 'on_device' | 'in_cloud' | 'unclassified';
 
 export interface Transaction {
   id: string;
@@ -52,6 +52,8 @@ export interface Transaction {
   balance?: number;
   category?: Category;
   categorySource?: CategorySource;
+  /** How sure the model was; low-confidence lines are the ones the app asks about. */
+  categoryConfidence?: 'high' | 'low';
   isInternalTransfer?: boolean;
 }
 

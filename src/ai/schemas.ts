@@ -12,8 +12,9 @@ export const classificationJsonSchema = {
         properties: {
           i: { type: 'integer' },
           category: { type: 'string', enum: [...CATEGORIES] },
+          confidence: { type: 'string', enum: ['high', 'low'] },
         },
-        required: ['i', 'category'],
+        required: ['i', 'category', 'confidence'],
       },
     },
   },

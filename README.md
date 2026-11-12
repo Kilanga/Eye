@@ -90,6 +90,24 @@ Every model call is in [`src/ai/models.ts`](src/ai/models.ts).
 4. The **outbound ledger** shows every request byte for byte, with `inferenceSource` from Firebase.
 5. No analytics, no third-party fonts or scripts, nothing stored. The optional follow-up summary (the same numbers as the cloud profile) is kept in the browser only if the user ticks the box.
 
+## Learning from your answers, on the device
+
+When the rules do not recognise a line, or Gemini Nano classifies it with low confidence (the on-device output schema carries a `confidence` field), the app asks about it, in plain words and only when the answer can change a result: large deposits, money in, and regular payments that could be a debt. Up to six questions, one per merchant ([`src/core/clarify.ts`](src/core/clarify.ts)).
+
+- **The answer applies at once** to every line with the same name, the review is recomputed and the change in ratio and checks is announced to screen readers.
+- **Learning, level 1: personal rules.** If the user ticks "Remember my answers on this browser", the merchant is stored as a SHA-256 fingerprint of its normalised name and direction, never as text. Next review, those lines are read before the model is called (source: "Your answers").
+- **Learning, level 2: the on-device prompt.** The answers of the session become few-shot examples in the Gemini Nano prompt, so a similar line (another contractor, another client) is read better. They stay in memory and only ever go to the on-device model; user answers are never mixed with demo data.
+- **Answers cannot hide a risk.** Only lines the app was unsure about can be answered; a line the rules flag (betting, payday loan, overdraft fee) is not editable, and a large deposit stays flagged whatever it is called. The lender still sees the real statement.
+
+### Why not a shared merchant database in the cloud?
+
+Crowd-sourcing "merchant → category" would make the app smarter for everyone, but in this version it would break the promise in [Privacy guarantees](#privacy-guarantees): a merchant name is a statement label, and the category itself can be sensitive (betting, a clinic, a payday lender). It would also need a backend and protection against poisoning. The design we would ship later, opt-in only:
+
+1. Send only the cleaned merchant name, never an amount, date, person's name or account number; drop any label that looks like a person or a reference.
+2. Randomised response on sensitive categories, so a single contribution says nothing certain about its author.
+3. Use a mapping only once *k* different users agree, and never let it override a rule.
+4. Ship the agreed mappings back as a read-only dictionary, so lookups stay on the device.
+
 ## Measurements
 
 The page `/eval.html` runs a labelled set of 198 statement lines (English and French) through the rules alone, then through rules + Gemini Nano with the user-data mode (`ONLY_ON_DEVICE`), and reports accuracy, time and bytes sent.

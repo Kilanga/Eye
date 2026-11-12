@@ -2,12 +2,20 @@ import { CATEGORIES, type CountryCode } from '../core/types';
 import type { CloudProfile } from '../core/profile';
 import { LEVER_PLACEHOLDERS, type CloudStep } from '../core/plan';
 
-export function classificationPrompt(labels: { i: number; label: string; amount: number }[]): string {
+export function classificationPrompt(
+  labels: { i: number; label: string; amount: number }[],
+  examples: { label: string; amount: number; category: string }[] = [],
+): string {
   return [
     'You classify bank statement lines for a mortgage readiness check.',
     'Labels may be in English or French. A positive amount is money in, negative is money out.',
     `Allowed categories: ${CATEGORIES.join(', ')}.`,
-    'Use "other" when unsure. Answer with JSON only: {"items":[{"i":<index>,"category":"<category>"}]}.',
+    'confidence: "high" only if the label clearly says what it is; "low" if you are guessing.',
+    'Use "other" with "low" when unsure.',
+    ...(examples.length
+      ? ['The account holder has already told us what these lines are; follow them for similar lines:', ...examples.slice(0, 12).map((e) => `${e.amount.toFixed(2)}\t${e.label}\t=> ${e.category}`)]
+      : []),
+    'Answer with JSON only: {"items":[{"i":<index>,"category":"<category>","confidence":"high|low"}]}.',
     '',
     ...labels.map((l) => `${l.i}\t${l.amount.toFixed(2)}\t${l.label}`),
   ].join('\n');

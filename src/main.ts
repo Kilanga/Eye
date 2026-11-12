@@ -3,6 +3,17 @@ import { HybridAI, type OnDeviceStatus } from './ai/models';
 import { analyze } from './core/analyze';
 import { guessQuery, runQuery, type QueryAnswer } from './core/ask';
 import { documentsFor, GIFT_LETTER_TEMPLATE } from './core/documents';
+import {
+  applyAnswer,
+  CHOICES_IN,
+  CHOICES_OUT,
+  clearPersonalRules,
+  fingerprint,
+  loadPersonalRules,
+  pickQuestions,
+  savePersonalRules,
+  type PersonalRules,
+} from './core/clarify';
 import { clearSnapshot, compareSnapshots, loadSnapshot, saveSnapshot, takeSnapshot, type Comparison, type Snapshot } from './core/followup';
 import { importCsv } from './core/import/csv';
 import { importOfx } from './core/import/ofx';
@@ -13,7 +24,7 @@ import { fillTemplate, listPlaceholders } from './core/letter';
 import { buildDraftPlan, finalisePlan, toCloudSteps, type DraftPlan, type FinalPlan } from './core/plan';
 import { buildCloudProfile, type CloudProfile } from './core/profile';
 import { getRulePack, PROGRAMS_BY_COUNTRY } from './core/rules';
-import type { Account, CategorySource, CheckResult, CheckStatus, CountryCode, DataOrigin, LoanProgram, Transaction, UserInputs } from './core/types';
+import type { Account, Category, CategorySource, CheckResult, CheckStatus, CountryCode, DataOrigin, LoanProgram, Transaction, UserInputs } from './core/types';
 import { accountToCsv, DEMO_PERSONAS } from './demo/generate';
 import { initFirebase } from './firebase';
 import { runPipeline, type PipelineResult } from './pipeline';
@@ -55,6 +66,9 @@ interface State {
   giftValues: Record<string, string>;
   docsDone: Record<string, boolean>;
   answer?: QueryAnswer & { by: string };
+  personalRules: PersonalRules;
+  examples: { label: string; amount: number; category: string; origin: DataOrigin }[];
+  answered: Record<string, Category | 'skip'>;
 }
 
 const state: State = {
@@ -69,6 +83,9 @@ const state: State = {
   letterValues: {},
   giftValues: {},
   docsDone: {},
+  personalRules: loadPersonalRules(),
+  examples: [],
+  answered: {},
 };
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -224,6 +241,7 @@ document.querySelector('#app')!.innerHTML = `
       <p class="lead" id="review-lead"></p>
       <div class="readers" id="who-read"></div>
       <div id="pipeline-notes"></div>
+      <div id="clarify"></div>
       <div class="compare hidden" id="compare"><h3>Since your last review</h3><p id="compare-note"></p><ul id="compare-list"></ul></div>
       <ol class="findings" id="findings" aria-label="Findings, most serious first"></ol>
       <div id="obligations"></div>
@@ -382,6 +400,7 @@ function renderAccounts(): void {
 
 const SOURCE_NAMES: Record<CategorySource, [string, string]> = {
   rule: ['Built-in rules', 'c-rule'],
+  user: ['Your answers', 'c-user'],
   on_device: ['Gemini Nano, on this device', 'c-device'],
   in_cloud: ['Cloud (sample files only)', 'c-cloud'],
   unclassified: ['Not recognised', 'c-none'],
@@ -418,6 +437,68 @@ function flaggedMap(): Map<string, CheckStatus> {
   const m = new Map<string, CheckStatus>();
   for (const c of state.result?.checks ?? []) if (c.status !== 'ok') c.transactionIds.forEach((id) => m.set(id, c.status));
   return m;
+}
+
+function renderClarify(): void {
+  const r = state.result!;
+  const qs = pickQuestions(allTxs(), r.metrics.incomeBase).filter((q) => state.answered[q.key] !== 'skip');
+  const unsure = allTxs().filter((t) => t.categorySource === 'unclassified' || t.categoryConfidence === 'low').length;
+  const remembered = Object.keys(state.personalRules).length;
+  if (!qs.length && !remembered) {
+    $('#clarify').innerHTML = '';
+    return;
+  }
+  $('#clarify').innerHTML = `<div class="clarify">
+    <h3 id="h-clarify">${qs.length ? `Help the app read ${unsure === 1 ? 'one line' : `${unsure} lines`} it is not sure about` : 'Your answers'}</h3>
+    ${qs.length ? `<p class="note">${qs.length === 1 ? 'One question' : `${qs.length} questions`}, the ones that can change a result. Each answer applies to every line of the same name, now and in your next reviews.</p>` : ''}
+    ${qs
+      .map((q, i) => {
+        const choices = q.direction === 'in' ? CHOICES_IN : CHOICES_OUT;
+        const meta = `${q.count === 1 ? 'one line' : `${q.count} lines`}, ${money(q.total, 2)} ${q.direction === 'in' ? 'received' : 'paid'}${q.months > 1 ? ` over ${q.months} months` : ''}`;
+        return `<fieldset class="question-set" data-key="${esc(q.key)}">
+          <legend><span class="label">${esc(q.exampleLabel)}</span><span class="note"> ${esc(meta)}</span></legend>
+          <p class="note">${esc(q.reason)}${q.guess ? ` Gemini Nano guessed ${esc(q.guess.replace(/_/g, ' '))}, without certainty.` : ''}</p>
+          <div class="choices">${choices
+            .map((c, j) => `<label class="choice"><input type="radio" name="q-${i}" value="${c.category}" data-key="${esc(q.key)}" ${j === 0 ? '' : ''} /> ${esc(c.label)}</label>`)
+            .join('')}<button type="button" class="btn link" data-skip="${esc(q.key)}">Skip</button></div>
+        </fieldset>`;
+      })
+      .join('')}
+    <div class="check-row"><input type="checkbox" id="remember" ${remembered ? 'checked' : ''} aria-describedby="remember-hint" /><label for="remember">Remember my answers on this browser</label></div>
+    <p class="note" id="remember-hint">Stored as a fingerprint that cannot be read back, never the merchant name. ${remembered ? `${remembered === 1 ? 'One answer' : `${remembered} answers`} remembered.` : ''} The lender still sees the real lines.</p>
+    ${remembered ? '<button type="button" class="btn link" id="forget-answers">Forget my remembered answers</button>' : ''}
+  </div>`;
+}
+
+function recountSources(): Record<CategorySource, number> {
+  const s: Record<CategorySource, number> = { rule: 0, user: 0, on_device: 0, in_cloud: 0, unclassified: 0 };
+  allTxs().forEach((t) => s[t.categorySource ?? 'unclassified']++);
+  return s;
+}
+
+async function answerQuestion(key: string, category: Category): Promise<void> {
+  const before = state.result!;
+  const changed = applyAnswer(allTxs(), key, category);
+  if (!changed.length) return;
+  state.answered[key] = category;
+  const t = changed[0];
+  state.examples.push({ label: t.rawLabel, amount: t.amount, category, origin: state.accounts.find((a) => a.id === t.accountId)?.origin ?? 'demo' });
+  if ($<HTMLInputElement>('#remember')?.checked) {
+    state.personalRules[await fingerprint(key)] = category;
+    savePersonalRules(state.personalRules);
+  }
+  state.result = { ...analyze(state.accounts, pack(), state.inputs), sources: recountSources(), notes: before.notes };
+  afterAnalysis(false);
+  const moved = state.result.checks.filter((c) => before.checks.find((b) => b.id === c.id)?.status !== c.status);
+  const ratio = (r: PipelineResult) => (Number.isFinite(r.metrics.debtRatio) ? `${(r.metrics.debtRatio * 100).toFixed(1)}%` : 'not computable');
+  const r0 = ratio(before);
+  const r1 = ratio(state.result);
+  announce(
+    `${changed.length === 1 ? 'One line' : `${changed.length} lines`} updated. ${pack().debtRatio.label} ${r0 === r1 ? `unchanged at ${r1}` : `went from ${r0} to ${r1}`}.${
+      moved.length ? ` Changed: ${moved.map((c) => `${c.title}, now ${VERDICT[c.status].word.toLowerCase()}`).join('; ')}.` : ''
+    }`,
+  );
+  $<HTMLElement>('#clarify input[type="radio"]')?.focus();
 }
 
 function renderFindings(): void {
@@ -726,6 +807,7 @@ function afterAnalysis(newScan: boolean): void {
   show('#explain', true);
   show('#ask', true);
   renderWhoRead();
+  renderClarify();
   renderComparison();
   renderPlan();
   renderFindings();
@@ -905,9 +987,15 @@ $('#analyze').addEventListener('click', async () => {
   announce('Reviewing your statements.');
   try {
     setProgress('#an-progress', 0.05);
-    state.result = await runPipeline(state.accounts, pack(), state.inputs, ai, (p) =>
-      setProgress('#an-progress', p.total ? (p.done ?? 0) / p.total : p.stage === 'analysis' ? 1 : 0.2),
+    state.result = await runPipeline(
+      state.accounts,
+      pack(),
+      state.inputs,
+      ai,
+      (p) => setProgress('#an-progress', p.total ? (p.done ?? 0) / p.total : p.stage === 'analysis' ? 1 : 0.2),
+      { rules: state.personalRules, examples: state.examples },
     );
+    state.answered = {};
     afterAnalysis(true);
     $('#review').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     $('#h-review').focus({ preventScroll: true });
@@ -918,6 +1006,33 @@ $('#analyze').addEventListener('click', async () => {
     setProgress('#an-progress', null);
     btn.disabled = state.accounts.length === 0;
     btn.textContent = 'Review my statements';
+  }
+});
+
+$('#clarify').addEventListener('change', async (e) => {
+  const el = e.target as HTMLInputElement;
+  if (el.type === 'radio' && el.dataset.key) await answerQuestion(el.dataset.key, el.value as Category);
+  if (el.id === 'remember' && !el.checked) {
+    state.personalRules = {};
+    clearPersonalRules();
+  }
+  if (el.id === 'remember' && el.checked) {
+    for (const [key, c] of Object.entries(state.answered)) if (c !== 'skip') state.personalRules[await fingerprint(key)] = c;
+    savePersonalRules(state.personalRules);
+  }
+});
+$('#clarify').addEventListener('click', (e) => {
+  const b = e.target as HTMLElement;
+  if (b.dataset.skip) {
+    state.answered[b.dataset.skip] = 'skip';
+    renderClarify();
+    $<HTMLElement>('#clarify input[type="radio"]')?.focus();
+  }
+  if (b.id === 'forget-answers') {
+    state.personalRules = {};
+    clearPersonalRules();
+    renderClarify();
+    announce('Remembered answers forgotten.');
   }
 });
 
@@ -1091,6 +1206,7 @@ $('#keep').addEventListener('change', (e) => {
 });
 $('#erase').addEventListener('click', () => {
   clearSnapshot();
+  clearPersonalRules();
   location.reload();
 });
 
