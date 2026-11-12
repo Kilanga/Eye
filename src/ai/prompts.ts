@@ -1,6 +1,35 @@
-import { CATEGORIES, type CountryCode } from '../core/types';
+import type { Category, CountryCode } from '../core/types';
 import type { CloudProfile } from '../core/profile';
 import { LEVER_PLACEHOLDERS, type CloudStep } from '../core/plan';
+
+/**
+ * One line per category, in general banking vocabulary (US and French). Written from what each
+ * category means to a lender. Written after the first run on real hardware; words that appear in
+ * the held-out lines were left out, so that set still measures how the prompt generalises.
+ */
+const CATEGORY_GUIDE: [Category, string][] = [
+  ['income_salary', 'pay from an employer: payroll, wages, salary, direct deposit, "VIR SALAIRE", "PAIE".'],
+  ['income_other', 'other money in: tax refund, interest, benefits, pension, a check or wire from someone.'],
+  ['internal_transfer', 'money moved between two accounts of the same person.'],
+  ['housing', 'rent, property manager, mortgage payment, condo or co-ownership fees, "LOYER".'],
+  ['loan_payment', 'repayment of a loan to a lender: car, student, personal or consumer loan, "PRET".'],
+  ['credit_card_payment', 'payment towards a credit card balance.'],
+  ['bnpl', 'buy now pay later: a purchase split into a few instalments.'],
+  ['payday_loan', 'short-term cash advance lenders: money in from them, or repayments to them.'],
+  ['gambling', 'betting, gaming, lottery, poker.'],
+  ['overdraft_fee', 'bank fee or interest for an overdrawn balance.'],
+  ['nsf_fee', 'bank fee for a payment returned unpaid (insufficient funds).'],
+  ['savings', 'money moved into a savings or investment account.'],
+  ['groceries', 'supermarket, grocery store, food market.'],
+  ['utilities', 'electricity, gas, water, internet, phone.'],
+  ['subscriptions', 'streaming, software, gym or other monthly memberships.'],
+  ['transport', 'fuel, public transport, ride share, parking, tolls.'],
+  ['cash_withdrawal', 'cash taken out at a cash machine or at a till.'],
+  ['cash_deposit', 'cash paid in at a branch or cash machine.'],
+  ['p2p_transfer', 'payment app transfers between people.'],
+  ['refund', 'a merchant giving money back for a return or a cancelled purchase.'],
+  ['other', 'everyday spending that is none of the above: shops, restaurants, health, school, childcare.'],
+];
 
 export function classificationPrompt(
   labels: { i: number; label: string; amount: number }[],
@@ -9,9 +38,11 @@ export function classificationPrompt(
   return [
     'You classify bank statement lines for a mortgage readiness check.',
     'Labels may be in English or French. A positive amount is money in, negative is money out.',
-    `Allowed categories: ${CATEGORIES.join(', ')}.`,
+    'Categories (what a lender means by each):',
+    ...CATEGORY_GUIDE.map(([c, d]) => `- ${c}: ${d}`),
+    'A payment that could be a debt (rent, any loan, instalments, an advance) is never "other": pick the closest debt category, with "low" if unsure.',
     'confidence: "high" only if the label clearly says what it is; "low" if you are guessing.',
-    'Use "other" with "low" when unsure.',
+    'Use "other" with "low" when you cannot tell.',
     ...(examples.length
       ? ['The account holder has already told us what these lines are; follow them for similar lines:', ...examples.slice(0, 12).map((e) => `${e.amount.toFixed(2)}\t${e.label}\t=> ${e.category}`)]
       : []),
@@ -57,7 +88,7 @@ export function interviewPrompt(profile: CloudProfile, flagged: string[]): strin
     'You are a mortgage underwriter reviewing an application. You only see this summary, never the statements.',
     `Country rules: ${profile.country}. Flagged checks: ${flagged.join(', ')}.`,
     'Ask the 3 to 5 questions you would really ask the applicant about the flagged checks, one per check at most,',
-    'plain and short (max 30 words). Each question names the check id it is about. English.',
+    'plain and short (max 30 words), in everyday words. Put the check id in the checkId field only, never in the question text. English.',
     'Return JSON: {"questions": [{"checkId": "...", "question": "..."}]}.',
     `Profile: ${JSON.stringify(profile)}`,
   ].join('\n');

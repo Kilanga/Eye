@@ -1,7 +1,7 @@
 import './styles.css';
 import { HybridAI, type OnDeviceStatus } from './ai/models';
 import { analyze } from './core/analyze';
-import { guessQuery, runQuery, type QueryAnswer } from './core/ask';
+import { guessQuery, reconcileQuery, runQuery, type QueryAnswer } from './core/ask';
 import { documentsFor, GIFT_LETTER_TEMPLATE } from './core/documents';
 import {
   applyAnswer,
@@ -761,7 +761,7 @@ function renderLedger(): void {
         .map(
           (e) =>
             `<tr><td>${e.at.slice(11, 19)}</td><td>${esc(e.kind.replace(/_/g, ' '))}</td><td>${e.bytes}</td><td>${esc(
-              e.kind === 'app_settings' ? 'Firebase Remote Config' : e.inferenceSource === 'in_cloud' ? 'Cloud' : e.inferenceSource === 'on_device' ? 'This device' : e.kind.startsWith('demo') ? 'Sample file' : 'Waiting',
+              e.kind === 'app_settings' ? 'Firebase Remote Config' : e.inferenceSource === 'in_cloud' ? 'Cloud' : e.inferenceSource === 'on_device' ? 'This device' : e.inferenceSource === 'failed' ? 'No answer' : e.kind.startsWith('demo') ? 'Sample file' : 'Waiting',
             )}</td><td><code>${esc(e.payload)}</code></td></tr>`,
         )
         .join('')
@@ -1075,7 +1075,7 @@ $('#polish').addEventListener('click', async () => {
     renderFindings();
     announce('Plan reworded.');
   } catch (err) {
-    $('#polish-note').textContent = `The plan keeps its original wording: ${(err as Error).message}`;
+    $('#polish-note').textContent = `The plan keeps its original wording: ${cloudTrouble(err)}.`;
   } finally {
     b.disabled = false;
   }
@@ -1093,7 +1093,7 @@ $('#get-questions').addEventListener('click', async () => {
       state.questionsBy = 'Asked by Gemini in the cloud, from the summary only.';
     }
   } catch (err) {
-    state.questionsBy = `The cloud did not answer (${(err as Error).message}); these are the usual questions.`;
+    state.questionsBy = `${cloudTrouble(err)}, so these are the usual questions.`;
   }
   if (!state.questions.length) {
     state.questions = defaultQuestions(state.result.checks);
@@ -1181,21 +1181,32 @@ $('#docs').addEventListener('change', (e) => {
   if (el.dataset.doc) state.docsDone[el.dataset.doc] = el.checked;
 });
 
+/** A plain sentence for a failed cloud call, instead of the SDK's error text. */
+function cloudTrouble(err: unknown): string {
+  const m = String((err as Error)?.message ?? err);
+  if (/paused/.test(m)) return 'The cloud is paused in the app settings';
+  if (!navigator.onLine) return 'You are offline';
+  if (/\b(503|429)\b|high demand|overloaded|quota|exhausted/i.test(m)) return 'The cloud model is busy right now, try again in a minute';
+  return 'The cloud did not answer';
+}
+
 async function ask(question: string): Promise<void> {
   if (!state.result || !question.trim()) return;
   const months = [...new Set(allTxs().map((t) => t.date.slice(0, 7)))].sort();
+  const labels = [...new Set(allTxs().map((t) => t.rawLabel))];
   let query = null;
   let by = '';
   try {
     if (ai && (origin() === 'demo' || state.device === 'available')) {
       query = await ai.understandQuestion(question, months, origin());
-      by = 'Understood by Gemini Nano and counted on this device.';
+      if (query) query = reconcileQuery(query, guessQuery(question, months, labels));
+      by = 'Understood by Gemini Nano, checked against the words of your question, and counted on this device.';
     }
   } catch {
     query = null;
   }
   if (!query) {
-    query = guessQuery(question, months);
+    query = guessQuery(question, months, labels);
     by = 'Understood by the built-in rules and counted on this device.';
   }
   state.answer = { ...runQuery(query, allTxs(), pack().currency, pack().locale), by };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { guessQuery, runQuery, sanitiseQuery } from '../src/core/ask';
+import { guessQuery, reconcileQuery, runQuery, sanitiseQuery } from '../src/core/ask';
 import { checkExplanation, defaultQuestions, sanitiseQuestions, templateExplanation } from '../src/core/interview';
 import { getRulePack } from '../src/core/rules';
 import { usAlmostReady } from '../src/demo/generate';
@@ -36,6 +36,38 @@ describe('ask your statements', () => {
     });
   });
 
+  it('keeps the words of the question over a wrong model reading', () => {
+    const months = ['2026-09', '2026-10'];
+    const q = 'How much did I spend on groceries each month?';
+    // What Gemini Nano returned on real hardware for this question.
+    const model = { intent: 'monthly_average', direction: 'out', categories: ['utilities'], month: '2026-10', text: '' } as const;
+    expect(reconcileQuery({ ...model, categories: [...model.categories] }, guessQuery(q, months))).toEqual({
+      intent: 'monthly_average',
+      direction: 'out',
+      categories: ['groceries'],
+      month: '',
+      text: '',
+    });
+    // With no keyword, the model's merchant and categories are kept.
+    const free = reconcileQuery(
+      { intent: 'list', direction: 'any', categories: ['subscriptions'], month: '', text: 'streamflix' },
+      guessQuery('What do I pay to Streamflix?', months),
+    );
+    expect(free).toMatchObject({ categories: ['subscriptions'], text: 'streamflix' });
+  });
+
+  it('finds a merchant named in the question', () => {
+    const labels = ['BRIGHTHOME FURNITURE PMT 3/12', 'MEGAMART #221'];
+    const q = 'Show my payments to BrightHome';
+    expect(guessQuery(q, [], labels)).toMatchObject({ intent: 'list', text: 'brighthome', categories: [] });
+    // What Gemini Nano returned on real hardware: the "other" category and no merchant.
+    expect(reconcileQuery({ intent: 'list', direction: 'out', categories: ['other'], month: '', text: '' }, guessQuery(q, [], labels))).toMatchObject({
+      categories: [],
+      text: 'brighthome',
+    });
+    expect(guessQuery('How much on groceries?', [], ['FRESH GROCERIES 12'])).toMatchObject({ categories: ['groceries'], text: '' });
+  });
+
   it('has a keyword fallback for the obvious questions', () => {
     expect(guessQuery('How much did I spend on groceries in October?', ['2026-09', '2026-10'])).toMatchObject({
       intent: 'total',
@@ -65,5 +97,32 @@ describe('lender interview', () => {
     expect(checkExplanation('The $6,000 deposit on 2026-10-14 was a gift from my aunt.', answers, deposit)).toBe(true);
     expect(checkExplanation('The $9,500 deposit was a gift.', answers, deposit)).toBe(false);
     expect(templateExplanation(answers)).toContain('A gift from my aunt');
+  });
+});
+
+describe('explanation paragraph from the on-device model', () => {
+  it('removes the greeting, brackets and minus signs Gemini Nano added on real hardware', async () => {
+    const { tidyExplanation } = await import('../src/core/interview');
+    const raw = 'Dear [Lender Name],\n\nOn October 14, 2026, I received a gift of $6,000.00 from my parents. An overdraft fee of -$35.00 was charged.\n\nSincerely,\n[Your Name]';
+    expect(tidyExplanation(raw)).toBe('On October 14, 2026, I received a gift of $6,000.00 from my parents. An overdraft fee of $35.00 was charged.');
+    expect(tidyExplanation('A payment of -40.00 USD on October 18.')).toBe('A payment of 40.00 USD on October 18.');
+  });
+});
+
+describe('underwriter questions from the cloud', () => {
+  it('takes internal ids out of the question text, as Gemini wrote them in a real run', async () => {
+    const { plainQuestion } = await import('../src/core/interview');
+    expect(plainQuestion('Regarding check debt_ratio, can you explain the steps you are taking?')).toBe('Can you explain the steps you are taking?');
+    expect(plainQuestion('What caused the large_deposits on your account?')).toBe('What caused the large deposits on your account?');
+  });
+});
+
+describe('explanation check', () => {
+  it('accepts dates written as words, as Gemini Nano did on real hardware', async () => {
+    const { checkExplanation } = await import('../src/core/interview');
+    const flagged = [{ id: 'a', accountId: 'x', date: '2026-09-05', amount: -385, currency: 'USD', country: 'US', rawLabel: 'SUMMIT AUTO LOAN PMT' }] as never;
+    const answers = [{ checkId: 'debt_ratio', question: 'Debts?', answer: 'The car loan ends next year.' }] as never;
+    expect(checkExplanation('I pay my car loan of 385.00 USD on September 5th.', answers, flagged)).toBe(true);
+    expect(checkExplanation('I pay my car loan of 400 USD on September 5th.', answers, flagged)).toBe(false);
   });
 });

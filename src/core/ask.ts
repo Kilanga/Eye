@@ -66,7 +66,19 @@ export function sanitiseQuery(raw: unknown, months: string[]): StatementQuery | 
 }
 
 /** Small keyword fallback when no model is available. */
-export function guessQuery(question: string, months: string[]): StatementQuery {
+const QUESTION_WORDS = new Set(
+  'how much many did spend spent show list payment payments paid pay each every month months total what which when where have from with that this money average largest biggest count combien fois mois mes les des pour avec quels quelles affiche depense depenses paye payes octobre'.split(' '),
+);
+
+/** A word of the question that appears in a statement label (a merchant name), or "". */
+export function labelWord(question: string, labels: string[]): string {
+  const plain = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const hay = labels.map(plain);
+  const words = plain(question).match(/[a-z0-9]{4,}/g) ?? [];
+  return words.find((w) => !QUESTION_WORDS.has(w) && hay.some((h) => h.includes(w))) ?? '';
+}
+
+export function guessQuery(question: string, months: string[], labels: string[] = []): StatementQuery {
   const q = question.toLowerCase();
   const pick = (pairs: [RegExp, Category[]][]) => pairs.filter(([re]) => re.test(q)).flatMap(([, c]) => c);
   const categories = pick([
@@ -87,7 +99,7 @@ export function guessQuery(question: string, months: string[]): StatementQuery {
     ? 'count'
     : /largest|biggest|plus gros|plus grand/.test(q)
       ? 'largest'
-      : /per month|par mois|average|moyenne/.test(q)
+      : /per month|each month|every month|a month|par mois|chaque mois|average|moyenne/.test(q)
         ? 'monthly_average'
         : /show|list|which|quels|quelles|affiche/.test(q)
           ? 'list'
@@ -95,7 +107,28 @@ export function guessQuery(question: string, months: string[]): StatementQuery {
   const direction = /earn|receive|income|salary|reçu|recu|gagn/.test(q) ? 'in' : /spend|spent|paid|pay |dépens|depens|payé/.test(q) ? 'out' : 'any';
   const monthNames = ['jan', 'feb|fév|fev', 'mar', 'apr|avr', 'may|mai', 'jun|juin', 'jul|juil', 'aug|août|aout', 'sep', 'oct', 'nov', 'dec|déc'];
   const month = months.find((m) => new RegExp(`\\b(${monthNames.at(Number(m.slice(5)) - 1)})`).test(q)) ?? '';
-  return { intent, direction, categories, month, text: '' };
+  // A merchant named in the question, when no category word is there.
+  const text = categories.length ? '' : labelWord(question, labels);
+  return { intent, direction, categories, month, text };
+}
+
+/**
+ * Code checks the model's reading of a question against the words actually in it. Where the
+ * question carries a clear cue (a category word, a month name, "each month", "spent"), the cue
+ * wins over the model; the model fills in the rest (a merchant name, a category with no keyword).
+ * Example caught on real hardware: "groceries each month" read as "utilities in October".
+ */
+export function reconcileQuery(model: StatementQuery, cues: StatementQuery): StatementQuery {
+  const overlap = model.categories.some((c) => cues.categories.includes(c));
+  return {
+    intent: cues.intent !== 'total' ? cues.intent : model.intent,
+    direction: cues.direction !== 'any' ? cues.direction : model.direction,
+    // A merchant named in the question: search for it, without a category guessed on top.
+    categories: cues.text ? [] : cues.categories.length && !overlap ? cues.categories : model.categories,
+    // A month the question does not name is an invention of the model.
+    month: cues.month,
+    text: cues.text || model.text,
+  };
 }
 
 export function runQuery(query: StatementQuery, txs: Transaction[], currency: string, locale: string): QueryAnswer {

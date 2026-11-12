@@ -94,6 +94,22 @@ export class OutboundLedger {
     this.emit();
   }
 
+  /** Drops an entry for a call that, in the end, stayed on the device (nothing was sent). */
+  discard(entry: LedgerEntry): void {
+    this.entries = this.entries.filter((e) => e !== entry);
+    this.emit();
+  }
+
+  /**
+   * For sample-file calls that may fall back to the cloud: keeps the entry only if the answer
+   * really came from the cloud.
+   */
+  settle(entry: LedgerEntry | undefined, source: string | undefined): void {
+    if (!entry) return;
+    if (source === 'in_cloud') this.setSource(entry, source);
+    else this.discard(entry);
+  }
+
   list(): readonly LedgerEntry[] {
     return this.entries;
   }

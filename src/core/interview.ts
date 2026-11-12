@@ -48,7 +48,16 @@ export function sanitiseQuestions(raw: unknown, flagged: CheckId[]): InterviewQu
         flagged.includes(q.checkId),
     )
     .slice(0, 5)
-    .map((q) => ({ checkId: q.checkId, question: q.question.trim() }));
+    .map((q) => ({ checkId: q.checkId, question: plainQuestion(q.question) }));
+}
+
+/** Removes internal ids a model may copy into the text ("Regarding check debt_ratio, ..."). */
+export function plainQuestion(q: string): string {
+  const out = q
+    .trim()
+    .replace(/^(regarding|about|for|re:?)\s+(the\s+)?(check\s+)?[a-z]+(_[a-z]+)+\s*(check)?[,:-]?\s*/i, '')
+    .replace(/\b[a-z]+(_[a-z]+)+\b/g, (id) => id.replace(/_/g, ' '));
+  return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
 export interface Answer extends InterviewQuestion {
@@ -59,6 +68,8 @@ export interface Answer extends InterviewQuestion {
 export function explanationPrompt(answers: Answer[], flagged: Transaction[], currency: string): string {
   return [
     'Write one paragraph (at most 120 words, first person, polite, factual) for a lender, explaining the items below.',
+    'It goes inside a letter that already has a greeting and a signature: no "Dear", no sign-off, no [brackets].',
+    'Include every fact from the applicant answers, in particular where money came from. Write amounts without a minus sign.',
     'Use ONLY the facts given. Do not invent dates, amounts, names or reasons. English.',
     'Flagged lines:',
     ...flagged.slice(0, 12).map((t) => `- ${t.date} ${t.rawLabel} ${t.amount.toFixed(2)} ${currency}`),
@@ -73,6 +84,21 @@ export function templateExplanation(answers: Answer[]): string {
   return parts.length ? `I would like to explain the following points. ${parts.join(' ')}` : '';
 }
 
+/** Removes what a model adds around the paragraph: greeting, sign-off, [placeholders], minus signs on amounts. */
+export function tidyExplanation(text: string): string {
+  const lines = text
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^(dear|to whom|hello|hi)\b/i.test(l) && !/^(sincerely|best regards|regards|kind regards|thank you,?)\b[,.]?$/i.test(l) && !/^\[[^\]]*\]$/.test(l));
+  return lines
+    .join(' ')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/-\s?\$/g, '$')
+    .replace(/(^|[\s(])-(?=\d)/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /** A paragraph from the model is kept only if it does not bring numbers that are in neither the answers nor the lines. */
 export function checkExplanation(text: string, answers: Answer[], flagged: Transaction[]): boolean {
   if (!text.trim() || text.length > 1200) return false;
@@ -81,8 +107,11 @@ export function checkExplanation(text: string, answers: Answer[], flagged: Trans
       .join(' ')
       .match(/\d+/g) ?? [],
   );
+  // Compare without leading zeros on both sides: "2026-09-05" in a line, "September 5th" in the text.
+  const bare = (n: string) => n.replace(/^0+(?=\d)/, '');
+  const knownBare = new Set([...known].map(bare));
   const plain = text.replace(/(\d)[,\s.\u00a0\u202f](?=\d{3}\b)/g, '$1');
-  return (plain.match(/\d+/g) ?? []).every((n) => known.has(n) || known.has(n.replace(/^0+(?=\d)/, '')));
+  return (plain.match(/\d+/g) ?? []).every((n) => known.has(n) || knownBare.has(bare(n)));
 }
 
 /** Letter template used offline, with the same placeholders as the cloud one. */
