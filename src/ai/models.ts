@@ -34,9 +34,9 @@ import {
   type Answer,
   type InterviewQuestion,
 } from '../core/interview';
+import { DEFAULT_SETTINGS, type AppSettings } from '../core/settings';
 import { validateModelItems, type StatementOptions } from '../core/import/statement-text';
 
-const CLOUD_MODEL = import.meta.env?.VITE_CLOUD_MODEL || 'gemini-3.5-flash-lite';
 /** Lines per on-device call: the local context window is small (about 4k tokens in). */
 const BATCH_SIZE = 40;
 
@@ -49,16 +49,32 @@ export interface LetterTemplate {
 
 export class HybridAI {
   private ai: AI;
-  private classifierLocal: GenerativeModel;
-  private classifierDemo: GenerativeModel;
-  private planner: GenerativeModel;
-  private writer: GenerativeModel;
-  private interviewer: GenerativeModel;
+  private settings: AppSettings = DEFAULT_SETTINGS;
+  private classifierLocal!: GenerativeModel;
+  private classifierDemo!: GenerativeModel;
+  private planner!: GenerativeModel;
+  private writer!: GenerativeModel;
+  private interviewer!: GenerativeModel;
   /** On-device models, one per task (each carries its own output constraint). */
-  private local: Record<'pdf' | 'ask' | 'explain', Record<DataOrigin, GenerativeModel>>;
+  private local!: Record<'pdf' | 'ask' | 'explain', Record<DataOrigin, GenerativeModel>>;
 
-  constructor(app: FirebaseApp, private ledger: OutboundLedger) {
+  constructor(app: FirebaseApp, private ledger: OutboundLedger, settings: AppSettings = DEFAULT_SETTINGS) {
     this.ai = getAI(app, { backend: new GoogleAIBackend() });
+    this.configure(settings);
+  }
+
+  get cloudEnabled(): boolean {
+    return this.settings.cloudEnabled;
+  }
+
+  /**
+   * (Re)builds every model from the app settings (Firebase Remote Config): which cloud model to
+   * use, and whether the cloud may be used at all. With the cloud switched off, sample files are
+   * read on the device only and the cloud tasks fall back to the local wording.
+   */
+  configure(settings: AppSettings): void {
+    this.settings = settings;
+    const cloudModel = settings.cloudModel;
     const onDeviceParams = {
       createOptions: {
         expectedInputs: [{ type: 'text' as const, languages: ['en', 'fr'] }],
@@ -70,32 +86,34 @@ export class HybridAI {
       mode: InferenceMode.ONLY_ON_DEVICE,
       onDeviceParams,
     });
-    this.classifierDemo = getGenerativeModel(this.ai, {
-      mode: InferenceMode.PREFER_ON_DEVICE,
-      onDeviceParams,
-      inCloudParams: {
-        model: CLOUD_MODEL,
-        generationConfig: { responseMimeType: 'application/json', temperature: 0 },
-      },
-    });
+    this.classifierDemo = settings.cloudEnabled
+      ? getGenerativeModel(this.ai, {
+          mode: InferenceMode.PREFER_ON_DEVICE,
+          onDeviceParams,
+          inCloudParams: {
+            model: cloudModel,
+            generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+          },
+        })
+      : this.classifierLocal;
     this.planner = getGenerativeModel(this.ai, {
       mode: InferenceMode.ONLY_IN_CLOUD,
       inCloudParams: {
-        model: CLOUD_MODEL,
+        model: cloudModel,
         generationConfig: { responseMimeType: 'application/json', responseSchema: planSchema },
       },
     });
     this.writer = getGenerativeModel(this.ai, {
       mode: InferenceMode.ONLY_IN_CLOUD,
       inCloudParams: {
-        model: CLOUD_MODEL,
+        model: cloudModel,
         generationConfig: { responseMimeType: 'application/json', responseSchema: letterSchema },
       },
     });
     this.interviewer = getGenerativeModel(this.ai, {
       mode: InferenceMode.ONLY_IN_CLOUD,
       inCloudParams: {
-        model: CLOUD_MODEL,
+        model: cloudModel,
         generationConfig: { responseMimeType: 'application/json', responseSchema: interviewSchema },
       },
     });
@@ -106,9 +124,13 @@ export class HybridAI {
     };
   }
 
+  private requireCloud(): void {
+    if (!this.settings.cloudEnabled) throw new Error('cloud features are paused in the app settings');
+  }
+
   /**
    * user data -> ONLY_ON_DEVICE; synthetic demo data -> PREFER_ON_DEVICE with a cloud fallback,
-   * so the demo works for judges without Gemini Nano.
+   * so the demo works for judges without Gemini Nano (unless the cloud is switched off).
    */
   private pair(responseConstraint?: object, json = true): Record<DataOrigin, GenerativeModel> {
     const onDeviceParams = {
@@ -118,16 +140,19 @@ export class HybridAI {
       },
       ...(responseConstraint ? { promptOptions: { responseConstraint } } : {}),
     };
+    const user = getGenerativeModel(this.ai, { mode: InferenceMode.ONLY_ON_DEVICE, onDeviceParams });
     return {
-      user: getGenerativeModel(this.ai, { mode: InferenceMode.ONLY_ON_DEVICE, onDeviceParams }),
-      demo: getGenerativeModel(this.ai, {
-        mode: InferenceMode.PREFER_ON_DEVICE,
-        onDeviceParams,
-        inCloudParams: {
-          model: CLOUD_MODEL,
-          generationConfig: json ? { responseMimeType: 'application/json', temperature: 0 } : { temperature: 0.3 },
-        },
-      }),
+      user,
+      demo: this.settings.cloudEnabled
+        ? getGenerativeModel(this.ai, {
+            mode: InferenceMode.PREFER_ON_DEVICE,
+            onDeviceParams,
+            inCloudParams: {
+              model: this.settings.cloudModel,
+              generationConfig: json ? { responseMimeType: 'application/json', temperature: 0 } : { temperature: 0.3 },
+            },
+          })
+        : user,
     };
   }
 
@@ -193,6 +218,7 @@ export class HybridAI {
    * The figures stay on the device; invalid wording falls back to the local text.
    */
   async generatePlan(profile: CloudProfile, draft: DraftPlan, rawLabels: string[]): Promise<FinalPlan> {
+    this.requireCloud();
     const steps = toCloudSteps(draft);
     const payload = { ...profile, steps };
     assertSafeForCloud(payload, rawLabels);
@@ -209,6 +235,7 @@ export class HybridAI {
   }
 
   async generateLetterTemplate(profile: CloudProfile, rawLabels: string[]): Promise<LetterTemplate> {
+    this.requireCloud();
     const flags = profile.checks.filter((c) => c.status !== 'ok').map((c) => c.id);
     const payload = { country: profile.country, flags };
     assertSafeForCloud(payload, rawLabels);
@@ -256,6 +283,7 @@ export class HybridAI {
 
   /** The underwriter's questions, from the summary profile only. */
   async interviewQuestions(profile: CloudProfile, rawLabels: string[]): Promise<InterviewQuestion[]> {
+    this.requireCloud();
     const flagged = profile.checks.filter((c) => c.status !== 'ok').map((c) => c.id);
     const payload = { ...profile };
     assertSafeForCloud(payload, rawLabels);
