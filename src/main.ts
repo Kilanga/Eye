@@ -32,6 +32,7 @@ import { initFirebase } from './firebase';
 import { loadSettings } from './remote-config';
 import { DEFAULT_SETTINGS, type AppSettings } from './core/settings';
 import { runPipeline, type PipelineResult } from './pipeline';
+import { isTransient } from './ai/retry';
 
 /*
  * Accessibility notes (WCAG 2.2 AA):
@@ -1214,7 +1215,7 @@ function cloudTrouble(err: unknown): string {
   const m = String((err as Error)?.message ?? err);
   if (/paused/.test(m)) return 'The cloud is paused in the app settings';
   if (!navigator.onLine) return 'You are offline';
-  if (/\b(503|429)\b|high demand|overloaded|quota|exhausted/i.test(m)) return 'The cloud model is busy right now, try again in a minute';
+  if (isTransient(err) || /quota|exhausted/i.test(m)) return 'The cloud model is busy right now, try again in a minute';
   return 'The cloud did not answer';
 }
 

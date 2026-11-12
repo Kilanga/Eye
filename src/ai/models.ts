@@ -38,6 +38,7 @@ import {
 import { DEFAULT_SETTINGS, type AppSettings } from '../core/settings';
 import { fitsDirection } from '../core/direction';
 import { validateModelItems, type StatementOptions } from '../core/import/statement-text';
+import { withOneRetry } from './retry';
 
 /** Lines per on-device call: the local context window is small (about 4k tokens in). */
 const BATCH_SIZE = 40;
@@ -131,7 +132,7 @@ export class HybridAI {
   /** Runs a cloud call and records in the ledger who answered, or that nothing came back. */
   private async cloudCall<T extends { response: { inferenceSource?: string } }>(entry: LedgerEntry, call: () => Promise<T>): Promise<T> {
     try {
-      const result = await call();
+      const result = await withOneRetry(call);
       this.ledger.setSource(entry, result.response.inferenceSource);
       return result;
     } catch (err) {
