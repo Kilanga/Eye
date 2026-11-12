@@ -96,3 +96,27 @@ describe('learning from the answers, on the device', () => {
     expect(seen[0].examples).toEqual([{ label: 'CAFE LUNA 0042', amount: -6, category: 'other', origin: 'demo' }]);
   });
 });
+
+describe('correcting lines in the full table', () => {
+  const line = (over: Partial<import('../src/core/types').Transaction>) =>
+    ({ id: Math.random().toString(36), accountId: 'a', date: '2026-10-01', amount: -42, currency: 'USD', country: 'US', rawLabel: 'CORNER SHOP 12', ...over }) as import('../src/core/types').Transaction;
+
+  it('lets the user change a line a model read, and change it again later', async () => {
+    const { applyAnswer, groupKey } = await import('../src/core/clarify');
+    const t = line({ category: 'loan_payment', categorySource: 'on_device', categoryConfidence: 'high' });
+    expect(applyAnswer([t], groupKey(t), 'groceries')).toHaveLength(1);
+    expect(t).toMatchObject({ category: 'groceries', categorySource: 'user' });
+    expect(applyAnswer([t], groupKey(t), 'internal_transfer')).toHaveLength(1);
+    expect(t.isInternalTransfer).toBe(true);
+    applyAnswer([t], groupKey(t), 'groceries');
+    expect(t.isInternalTransfer).toBeUndefined();
+  });
+
+  it('never changes a line the built-in rules read', async () => {
+    const { applyAnswer, groupKey, isCorrectable } = await import('../src/core/clarify');
+    const t = line({ rawLabel: 'LUCKY STAR CASINO', category: 'gambling', categorySource: 'rule' });
+    expect(isCorrectable(t)).toBe(false);
+    expect(applyAnswer([t], groupKey(t), 'groceries')).toHaveLength(0);
+    expect(t.category).toBe('gambling');
+  });
+});

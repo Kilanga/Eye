@@ -1179,3 +1179,16 @@ table,
 table.plan {
   font-variant-numeric: normal;
 }
+
+/* Correcting a line in the full table: compact, still a 44 px target. */
+.lines select.recat {
+  min-height: 2.75rem;
+  width: auto;
+  max-width: 14rem;
+  padding: 0.3rem 0.5rem;
+  font-family: var(--text);
+  font-size: 0.85rem;
+}
+.lines td:first-child {
+  white-space: nowrap;
+}

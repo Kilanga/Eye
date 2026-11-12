@@ -9,6 +9,8 @@ import {
   CHOICES_OUT,
   clearPersonalRules,
   fingerprint,
+  groupKey,
+  isCorrectable,
   loadPersonalRules,
   pickQuestions,
   savePersonalRules,
@@ -268,7 +270,7 @@ document.querySelector('#app')!.innerHTML = `
         <div class="sim-result" aria-live="polite"><span class="note" id="sim-label"></span><span class="ratio" id="sim-ratio"></span><span id="sim-verdict"></span></div>
       </div>
       <div class="actions"><button type="button" class="btn secondary" id="sim-apply">Use this housing payment</button></div>
-      <details style="margin-top:1.5rem"><summary>Every line, and who read it</summary><div class="scroll" tabindex="0" role="region" aria-label="All statement lines"><table class="lines" id="lines"></table></div></details>
+      <details style="margin-top:1.5rem" id="all-lines"><summary>Every line, and who read it</summary><p class="note" id="lines-hint">You can correct any line Gemini Nano read, or one you answered: the change applies to every line of the same name. Lines read by the built-in rules stay as they are, because the lender reads them the same way.</p><div class="scroll" tabindex="0" role="region" aria-label="All statement lines"><table class="lines" id="lines"></table></div></details>
     </section>
 
     <section class="sheet hidden" id="plan-card" aria-labelledby="h-plan">
@@ -433,13 +435,26 @@ function renderWhoRead(): void {
   $('#pipeline-notes').innerHTML = state.result!.notes.map((n) => `<p class="notice">${esc(n)}</p>`).join('');
 }
 
+/** A select to correct a line a model read (or the user answered); rule lines stay plain text. */
+function typeCell(t: Transaction, editable: boolean): string {
+  const current = t.category ?? 'other';
+  const plain = current.replace(/_/g, ' ');
+  if (!editable || !isCorrectable(t)) return `<td class="by">${esc(plain)}</td>`;
+  const choices = t.amount >= 0 ? CHOICES_IN : CHOICES_OUT;
+  const options = [
+    ...(choices.some((c) => c.category === current) ? [] : [`<option value="${current}" selected>${esc(plain)}</option>`]),
+    ...choices.map((c) => `<option value="${c.category}"${c.category === current ? ' selected' : ''}>${esc(c.label)}</option>`),
+  ].join('');
+  return `<td class="by"><select class="recat" data-recat="${esc(groupKey(t))}" aria-label="What is ${esc(t.rawLabel)}, ${t.date}?">${options}</select></td>`;
+}
+
 function txRows(txs: Transaction[], flagged: Map<string, CheckStatus>, withSource = true): string {
   return txs
     .map((t) => {
       const f = flagged.get(t.id);
       const label = f ? `<mark class="${f === 'alert' ? 'fix' : ''}">${esc(t.rawLabel)}</mark>` : esc(t.rawLabel);
       const src = withSource ? `<td class="by">${SOURCE_NAMES[t.categorySource ?? 'unclassified'][0]}</td>` : '';
-      return `<tr><td>${t.date}</td><td>${label}</td><td class="amt">${money(t.amount, 2)}</td><td class="by">${esc((t.category ?? 'other').replace(/_/g, ' '))}</td>${src}</tr>`;
+      return `<tr><td>${t.date}</td><td>${label}</td><td class="amt">${money(t.amount, 2)}</td>${typeCell(t, withSource)}${src}</tr>`;
     })
     .join('');
 }
@@ -494,7 +509,7 @@ function recountSources(): Record<CategorySource, number> {
   return s;
 }
 
-async function answerQuestion(key: string, category: Category): Promise<void> {
+async function answerQuestion(key: string, category: Category, from: 'question' | 'table' = 'question'): Promise<void> {
   const before = state.result!;
   const changed = applyAnswer(allTxs(), key, category);
   if (!changed.length) return;
@@ -516,7 +531,8 @@ async function answerQuestion(key: string, category: Category): Promise<void> {
       moved.length ? ` Changed: ${moved.map((c) => `${c.title}, now ${VERDICT[c.status].word.toLowerCase()}`).join('; ')}.` : ''
     }`,
   );
-  $<HTMLElement>('#clarify input[type="radio"]')?.focus();
+  if (from === 'table') $<HTMLElement>(`select[data-recat="${CSS.escape(key)}"]`)?.focus();
+  else $<HTMLElement>('#clarify input[type="radio"]')?.focus();
 }
 
 function renderFindings(): void {
@@ -1027,6 +1043,10 @@ $('#analyze').addEventListener('click', async () => {
   }
 });
 
+$('#all-lines').addEventListener('change', async (e) => {
+  const el = e.target as HTMLSelectElement;
+  if (el.matches('select[data-recat]')) await answerQuestion(el.dataset.recat!, el.value as Category, 'table');
+});
 $('#clarify').addEventListener('change', async (e) => {
   const el = e.target as HTMLInputElement;
   if (el.type === 'radio' && el.dataset.key) await answerQuestion(el.dataset.key, el.value as Category);
