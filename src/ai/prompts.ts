@@ -1,6 +1,6 @@
 import type { Category, CountryCode } from '../core/types';
 import type { CloudProfile } from '../core/profile';
-import { LEVER_PLACEHOLDERS, type CloudStep } from '../core/plan';
+import { LEVER_PLACEHOLDERS, placeholderMeaning, type CloudStep } from '../core/plan';
 
 /**
  * One line per category, in general banking vocabulary (US and French). Written from what each
@@ -59,6 +59,7 @@ export function planPrompt(profile: CloudProfile, steps: CloudStep[]): string {
     'The steps of a 90-day plan are already decided by code. Your job is the wording only.',
     'For each step i, write "action" (what to do, max 25 words) and "why" (the lender\'s view, max 25 words).',
     'NEVER write a digit. Every figure must be a placeholder in double curly braces, chosen ONLY from that step\'s list.',
+    'Each placeholder is filled in with its unit already: write around it, never repeat its noun, "%" or currency.',
     'Also write a "summary" of at most 2 sentences, with no digits and no placeholders.',
     'No investment advice, no lender or product names. English.',
     'Return JSON: {"summary": "...", "steps": [{"i": 0, "action": "...", "why": "..."}]}.',
@@ -66,7 +67,10 @@ export function planPrompt(profile: CloudProfile, steps: CloudStep[]): string {
     `Profile: ${JSON.stringify(profile)}`,
     'Steps:',
     ...steps.map(
-      (s, i) => `${i}\tweek ${s.week}\t${s.checkId}\t${s.lever}\tplaceholders: ${LEVER_PLACEHOLDERS[s.lever].map((p) => `{{${p}}}`).join(' ')}`,
+      (s, i) =>
+        `${i}\tweek ${s.week}\t${s.checkId}\t${s.lever}\tplaceholders: ${LEVER_PLACEHOLDERS[s.lever]
+          .map((p) => `{{${p}}} = ${placeholderMeaning(p)}`)
+          .join('; ')}`,
     ),
   ].join('\n');
 }

@@ -71,6 +71,45 @@ export const LEVER_PLACEHOLDERS: Record<LeverId, readonly string[]> = {
   build_funds: ['funds_gap', 'cash_to_close'],
 };
 
+/**
+ * What each placeholder becomes once filled in, so the model writes around it correctly.
+ * Counts already carry their noun ("2 large deposits"), ratios their % sign, amounts their currency.
+ */
+const COUNT_NOUN: Record<string, string> = {
+  overdraft_events: 'overdraft or returned-payment fees',
+  large_deposit_count: 'large deposits',
+  gambling_count: 'gambling payments',
+  payday_count: 'quick-loan payments',
+  obligations_pending: 'payments',
+  cash_count: 'cash deposits',
+  statement_age_days: 'days',
+};
+const PERCENT = ['current_ratio', 'target_ratio'];
+const MONEY = ['monthly_reduction', 'max_housing_payment', 'large_deposit_total', 'gambling_monthly', 'cash_total', 'funds_gap', 'cash_to_close'];
+
+export function placeholderMeaning(key: string): string {
+  if (COUNT_NOUN[key]) return `a number WITH its noun, like "2 ${COUNT_NOUN[key]}": do not repeat the noun`;
+  if (PERCENT.includes(key)) return 'a percentage WITH its % sign, like "41.5%": never add "percent"';
+  if (MONEY.includes(key)) return 'an amount WITH its currency sign, like "$1,200": never add a currency';
+  return 'a bare number, like "3"';
+}
+
+const NOUN_AFTER_COUNT =
+  /^\s+(?:[a-z-]+\s+)?(?:deposits?|payments?|fees?|entr(?:y|ies)|transactions?|loans?|days?|events?|overdrafts?|charges?|bets?|withdrawals?|items?)\b/i;
+
+/** True when the text around a placeholder repeats what the filled-in value already says. */
+function repeatsItsValue(text: string): boolean {
+  for (const m of text.matchAll(PLACEHOLDER)) {
+    const key = m[1];
+    const before = text.slice(0, m.index);
+    const after = text.slice(m.index! + m[0].length);
+    if (COUNT_NOUN[key] && NOUN_AFTER_COUNT.test(after)) return true;
+    if (PERCENT.includes(key) && /^\s*(?:%|per\s*cent|percent)/i.test(after)) return true;
+    if (MONEY.includes(key) && (/[$€£]\s*$/.test(before) || /^\s*(?:dollars?|euros?|usd|eur)\b/i.test(after))) return true;
+  }
+  return false;
+}
+
 /** Default wording, used offline or whenever the model's wording fails validation. */
 export const DEFAULT_TEXT: Record<LeverId, { action: string; why: string }> = {
   complete_statements: {
@@ -233,6 +272,7 @@ export function isValidWording(text: unknown, allowed: readonly string[]): text 
   if (typeof text !== 'string' || text.trim() === '' || text.length > 300) return false;
   const withoutPlaceholders = text.replace(PLACEHOLDER, '');
   if (/\d/.test(withoutPlaceholders)) return false;
+  if (repeatsItsValue(text)) return false;
   return [...text.matchAll(PLACEHOLDER)].every((m) => allowed.includes(m[1]));
 }
 
