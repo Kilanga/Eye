@@ -217,7 +217,7 @@ Without Firebase configuration the app runs in **offline demo mode**: rules only
    - turn on **AI monitoring** in AI Logic settings (it only ever sees the cloud calls, which carry the summary profile);
    - the app already requests limited-use App Check tokens, ready for replay protection.
 3. Optional: in **Remote Config**, add `cloud_model`, `cloud_enabled` and `clarify_max_questions` (see above) and publish. Without a template the defaults apply.
-4. Copy `.env.example` to `.env.local` and fill it in.
+4. Copy `.env.example` to `.env.local` and fill it in. The App Check debug token goes in `APPCHECK_DEBUG_TOKEN`, without the `VITE_` prefix: the dev server injects it, and `npm run build` fails if it would end up in the published files.
 5. `npm run build && npx firebase-tools deploy --only hosting`.
 
 ### Gemini Nano in Chrome

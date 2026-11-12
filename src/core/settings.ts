@@ -16,7 +16,7 @@ export const SETTING_KEYS = ['cloud_model', 'cloud_enabled', 'clarify_max_questi
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  cloudModel: import.meta.env?.VITE_CLOUD_MODEL || 'gemini-3.5-flash-lite',
+  cloudModel: import.meta.env.VITE_CLOUD_MODEL || 'gemini-3.5-flash-lite',
   cloudEnabled: true,
   maxQuestions: 6,
 };
