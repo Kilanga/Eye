@@ -5,7 +5,7 @@ import { guessQuery, runQuery, type QueryAnswer } from './core/ask';
 import { clearSnapshot, compareSnapshots, loadSnapshot, saveSnapshot, takeSnapshot, type Comparison, type Snapshot } from './core/followup';
 import { importCsv } from './core/import/csv';
 import { importOfx } from './core/import/ofx';
-import { chunkLines, guessYear, parseWithLayout } from './core/import/statement-text';
+import { chunkLines, guessYear, lineText, parseWithLayout } from './core/import/statement-text';
 import {
   defaultQuestions,
   LOCAL_LETTER_TEMPLATE,
@@ -17,8 +17,9 @@ import { OutboundLedger } from './core/ledger';
 import { fillTemplate, listPlaceholders } from './core/letter';
 import { buildDraftPlan, finalisePlan, toCloudSteps, type DraftPlan, type FinalPlan } from './core/plan';
 import { buildCloudProfile, type CloudProfile } from './core/profile';
-import { getRulePack } from './core/rules';
-import type { Account, CategorySource, CountryCode, DataOrigin, Transaction, UserInputs } from './core/types';
+import { getRulePack, PROGRAMS_BY_COUNTRY } from './core/rules';
+import { documentsFor, GIFT_LETTER_TEMPLATE } from './core/documents';
+import type { Account, CategorySource, CountryCode, DataOrigin, LoanProgram, Transaction, UserInputs } from './core/types';
 import { accountToCsv, DEMO_PERSONAS } from './demo/generate';
 import { initFirebase } from './firebase';
 import { runPipeline, type PipelineResult } from './pipeline';
@@ -31,6 +32,9 @@ const ai = app ? new HybridAI(app, ledger) : null;
 
 interface State {
   country: CountryCode;
+  program: LoanProgram;
+  giftValues: Record<string, string>;
+  docsDone: Record<string, boolean>;
   accounts: Account[];
   methods: Record<string, string>;
   inputs: UserInputs;
@@ -52,6 +56,9 @@ interface State {
 
 const state: State = {
   country: 'US',
+  program: 'conventional',
+  giftValues: {},
+  docsDone: {},
   accounts: [],
   methods: {},
   inputs: { projectedHousingPayment: 0 },
@@ -65,7 +72,7 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySe
 const $$ = <T extends HTMLElement = HTMLElement>(sel: string) => [...document.querySelectorAll(sel)] as T[];
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-const pack = () => getRulePack(state.country);
+const pack = () => getRulePack(state.country, state.program);
 const money = (n: number, digits = 0) =>
   new Intl.NumberFormat(pack().locale, { style: 'currency', currency: pack().currency, maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n);
 const origin = (): DataOrigin => (state.accounts.some((a) => a.origin === 'user') ? 'user' : 'demo');
@@ -98,10 +105,17 @@ document.querySelector('#app')!.innerHTML = `
   <p class="lead">CSV, OFX or PDF, one file per account. Add every account: lenders see transfers between them.</p>
   <div class="row">
     <label>Lending rules<select id="country"><option value="US">United States</option><option value="FR">France</option></select></label>
+    <label id="program-label">Loan program<select id="program"></select></label>
     <label id="gross-label">Gross monthly income<input type="number" id="gross" min="0" step="50" placeholder="e.g. 6400" /></label>
     <label>Target monthly housing payment<input type="number" id="housing" min="0" step="50" placeholder="e.g. 1850" /></label>
-    <button class="ghost" id="prepare">Prepare private mode</button>
+    <label id="cash-label">Cash needed at closing (optional)<input type="number" id="cash" min="0" step="500" placeholder="down payment + costs" /></label>
   </div>
+  <div class="row hidden" id="se-row" style="margin-top:10px">
+    <label>Statements are from a<select id="kind"><option value="business">business account</option><option value="personal">personal account</option></select></label>
+    <label>Business expense ratio (%)<input type="number" id="expense" min="0" max="90" step="5" value="50" /></label>
+    <span class="note">Lenders use 50% unless a CPA or third-party letter shows lower expenses.</span>
+  </div>
+  <div class="row" style="margin-top:10px"><button class="ghost" id="prepare">Prepare private mode</button></div>
   <p class="note" id="rules-note"></p>
   <div class="progress hidden" id="dl-progress"><div></div></div>
   <div class="drop" id="drop" style="margin-top:14px">
@@ -155,6 +169,14 @@ document.querySelector('#app')!.innerHTML = `
   <div id="questions"></div>
   <div class="row hidden" id="explain-actions" style="margin-top:12px"><button id="write-explanation">Write my explanation on this device</button><span class="note" id="explanation-note"></span></div>
   <div id="explanation"></div>
+  <div id="docs"></div>
+  <div class="row" style="margin-top:12px"><button class="ghost" id="gift-btn">Prepare a gift letter</button><span class="note">For money a relative gave you toward the home.</span></div>
+  <div id="gift-block" class="hidden">
+    <h3>Gift letter</h3>
+    <div class="row" id="gift-fields"></div>
+    <div class="letter" id="gift-text" style="margin-top:12px"></div>
+    <div class="row" style="margin-top:10px"><button class="ghost small" id="download-gift">Download .txt</button><span class="note">Filled in on this device; the donor signs it.</span></div>
+  </div>
   <div id="letter-block" class="hidden">
     <h3>Your letter</h3>
     <div class="row" id="letter-fields"></div>
@@ -215,9 +237,21 @@ function renderPills(): void {
   $('#prepare').textContent = state.device === 'available' ? 'Private mode ready' : 'Prepare private mode';
 }
 
+function renderPrograms(): void {
+  const progs = PROGRAMS_BY_COUNTRY[state.country];
+  if (!progs.some((p) => p.program === state.program)) state.program = progs[0].program;
+  $('#program').innerHTML = progs
+    .map((p) => `<option value="${p.program}" ${p.program === state.program ? 'selected' : ''}>${esc(p.displayName.replace(/^[^-]+- /, ''))}</option>`)
+    .join('');
+  show('#program-label', progs.length > 1);
+  show('#cash-label', state.country === 'US');
+}
+
 function renderRules(): void {
+  renderPrograms();
   const p = pack();
-  $('#rules-note').textContent = `${p.displayName}: ${p.statementMonths} months of statements, ${p.debtRatio.label} comfortable up to ${Math.round(p.debtRatio.comfort * 100)}%, limit around ${Math.round(p.debtRatio.max * 100)}%${p.incomeBasis === 'gross' ? ', on gross income' : ', on net income'}.`;
+  show('#se-row', p.incomeBasis === 'deposits');
+  $('#rules-note').textContent = `${p.displayName}: ${p.statementMonths} months of statements,${p.incomeBasis === 'deposits' ? ' income from eligible deposits,' : ''} ${p.debtRatio.label} comfortable up to ${Math.round(p.debtRatio.comfort * 100)}%, limit around ${Math.round(p.debtRatio.max * 100)}%${p.incomeBasis === 'gross' ? ', on gross income' : p.incomeBasis === 'net' ? ', on net income' : ''}.`;
   show('#gross-label', p.incomeBasis === 'gross');
 }
 
@@ -280,7 +314,7 @@ function renderChecks(): void {
     ? `<h3>Recurring payments a lender may count as debt</h3>${obs
         .map((o) => {
           const d = state.inputs.obligationDecisions?.[o.key];
-          return `<div class="obligation"><span><strong>${esc(o.exampleLabel)}</strong> &middot; ${money(o.monthlyAmount, 2)} a month for ${o.months} months${
+          return `<div class="obligation"><span><strong>${esc(o.exampleLabel)}</strong> &middot; ${money(o.monthlyAmount, 2)} a month for ${o.months} months${o.kind === 'person' ? ' &middot; regular payments to a person: a private loan or support counts as debt' : ''}${
             d ? ` &middot; <em>${d === 'debt' ? 'counted as debt' : 'not debt'}</em>` : o.confidence === 'high' ? ' &middot; <em>looks like credit, counted</em>' : ''
           }</span><span><button class="small ghost" data-ob="${esc(o.key)}" data-d="debt">It is credit</button> <button class="small quiet" data-ob="${esc(o.key)}" data-d="not_debt">Not credit</button></span></div>`;
         })
@@ -400,6 +434,39 @@ function updateLetter(): void {
   if (missing.length) $('#letter-note').textContent = `Still to fill: ${missing.join(', ').replace(/_/g, ' ')}.`;
 }
 
+function renderDocs(): void {
+  const items = state.result ? documentsFor(state.result.checks, pack().program) : [];
+  $('#docs').innerHTML = items.length
+    ? `<h3>Documents to gather now</h3><p class="note">What a lender asks for, given your lights. Ticks stay on this page only.</p>${items
+        .map((d, i) => {
+          const key = `${d.checkId}:${i}`;
+          return `<label class="inline"><input type="checkbox" data-doc="${esc(key)}" ${state.docsDone[key] ? 'checked' : ''} /> ${esc(d.text)}</label>`;
+        })
+        .join('')}`
+    : '';
+}
+
+function renderGift(): void {
+  const v = state.giftValues;
+  v.date ||= new Date().toLocaleDateString(pack().locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  const largeIds = new Set(state.result?.checks.find((c) => c.id === 'large_deposits')?.transactionIds ?? []);
+  const deposit = allTxs().filter((t) => largeIds.has(t.id)).sort((a, b) => b.amount - a.amount)[0];
+  if (deposit) {
+    v.gift_amount ||= money(deposit.amount, 2);
+    v.gift_date ||= deposit.date;
+  }
+  const keys = listPlaceholders(GIFT_LETTER_TEMPLATE).filter((k) => k !== 'date');
+  $('#gift-fields').innerHTML = keys
+    .map((k) => `<label>${esc(k.replace(/_/g, ' '))}<input type="text" data-gift="${esc(k)}" value="${esc(v[k] ?? '')}" /></label>`)
+    .join('');
+  updateGift();
+}
+
+function updateGift(): void {
+  $$<HTMLInputElement>('[data-gift]').forEach((i) => (state.giftValues[i.dataset.gift!] = i.value));
+  $('#gift-text').textContent = fillTemplate(GIFT_LETTER_TEMPLATE, state.giftValues).text;
+}
+
 function renderAnswer(): void {
   const a = state.answer;
   $('#answer').innerHTML = a
@@ -469,6 +536,13 @@ function readInputs(): void {
     ...state.inputs,
     projectedHousingPayment: Number($<HTMLInputElement>('#housing').value) || 0,
     grossMonthlyIncome: pack().incomeBasis === 'gross' && gross > 0 ? gross : undefined,
+    accountKind: $<HTMLSelectElement>('#kind').value as 'business' | 'personal',
+    expenseRatio:
+      pack().incomeBasis === 'deposits' && $<HTMLSelectElement>('#kind').value === 'business'
+        ? Math.min(0.9, Math.max(0, Number($<HTMLInputElement>('#expense').value) / 100))
+        : undefined,
+    cashToClose: Number($<HTMLInputElement>('#cash').value) || undefined,
+    applicationDate: state.asOf,
   };
 }
 
@@ -502,6 +576,7 @@ function afterAnalysis(newScan: boolean): void {
   renderQuestions();
   renderLetter();
   renderAnswer();
+  renderDocs();
   renderPrivacy();
 }
 
@@ -520,6 +595,10 @@ async function importFile(file: File, i: number): Promise<Account> {
   if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
     const { readPdfInBrowser } = await import('./core/import/pdf');
     const lines = await readPdfInBrowser(await file.arrayBuffer());
+    // Lenders want every page: compare "Page x of y" with the pages actually in the file.
+    const declared = Math.max(0, ...lines.map((l) => Number(lineText(l).match(/\bpage\s*\d+\s*(?:of|sur|\/)\s*(\d+)/i)?.[1] ?? 0)));
+    const present = new Set(lines.map((l) => l.page)).size;
+    if (declared > present) incompletePdfs.push(`${file.name}: ${present} of ${declared} pages. Lenders require every page.`);
     const byLayout = parseWithLayout(lines, opts, new Date().getFullYear());
     if (byLayout.method === 'layout' && byLayout.unreadLines <= byLayout.transactions.length * 0.1) {
       transactions = byLayout.transactions;
@@ -542,7 +621,10 @@ async function importFile(file: File, i: number): Promise<Account> {
   return { id, name: file.name, currency: p.currency, country: state.country, origin: 'user', transactions };
 }
 
+const incompletePdfs: string[] = [];
+
 async function importFiles(files: File[]): Promise<void> {
+  incompletePdfs.length = 0;
   if (state.accounts.some((a) => a.origin === 'demo')) state.accounts = [];
   state.asOf = undefined;
   const errors: string[] = [];
@@ -555,7 +637,7 @@ async function importFiles(files: File[]): Promise<void> {
       setProgress('#an-progress', null);
     }
   }
-  notice('#import-notes', errors.join(' '));
+  notice('#import-notes', [...errors, ...incompletePdfs].join(' '));
   renderAccounts();
   renderPrivacy();
 }
@@ -571,6 +653,12 @@ function download(name: string, data: BlobPart, type: string): void {
 
 $('#country').addEventListener('change', (e) => {
   state.country = (e.target as HTMLSelectElement).value as CountryCode;
+  state.program = PROGRAMS_BY_COUNTRY[state.country][0].program;
+  renderRules();
+});
+
+$('#program').addEventListener('change', (e) => {
+  state.program = (e.target as HTMLSelectElement).value as LoanProgram;
   renderRules();
 });
 
@@ -597,6 +685,9 @@ $$('[data-demo]').forEach((btn) =>
     state.methods = {};
     state.asOf = p.asOf;
     state.inputs = { projectedHousingPayment: p.projectedHousingPayment };
+    state.program = p.program ?? PROGRAMS_BY_COUNTRY[p.country][0].program;
+    $<HTMLInputElement>('#cash').value = p.cashToClose ? String(p.cashToClose) : '';
+    if (p.accountKind) $<HTMLSelectElement>('#kind').value = p.accountKind;
     $<HTMLInputElement>('#gross').value = p.grossMonthlyIncome ? String(p.grossMonthlyIncome) : '';
     $<HTMLInputElement>('#housing').value = String(p.projectedHousingPayment);
     notice('#import-notes', '');
@@ -760,6 +851,16 @@ $('#write-explanation').addEventListener('click', async () => {
 });
 
 $('#letter-fields').addEventListener('input', updateLetter);
+$('#gift-fields').addEventListener('input', updateGift);
+$('#gift-btn').addEventListener('click', () => {
+  show('#gift-block', true);
+  renderGift();
+});
+$('#download-gift').addEventListener('click', () => download('gift-letter.txt', $('#gift-text').textContent ?? '', 'text/plain'));
+$('#docs').addEventListener('change', (e) => {
+  const el = e.target as HTMLInputElement;
+  if (el.dataset.doc) state.docsDone[el.dataset.doc] = el.checked;
+});
 $('#copy-letter').addEventListener('click', () => navigator.clipboard?.writeText($('#letter-text').textContent ?? ''));
 $('#download-letter').addEventListener('click', () => download('letter-of-explanation.txt', $('#letter-text').textContent ?? '', 'text/plain'));
 

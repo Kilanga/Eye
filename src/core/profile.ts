@@ -1,4 +1,4 @@
-import type { Analysis, CheckId, CheckStatus, CountryCode } from './types';
+import type { Analysis, CheckId, CheckStatus, CountryCode, LoanProgram } from './types';
 
 /**
  * The ONLY thing that leaves the device.
@@ -9,6 +9,7 @@ import type { Analysis, CheckId, CheckStatus, CountryCode } from './types';
  */
 export interface CloudProfile {
   country: CountryCode;
+  program: LoanProgram;
   monthsCovered: number;
   /** Lower bound of a 500-wide bucket, in the pack currency. */
   incomeBucket: number;
@@ -28,6 +29,7 @@ export interface CloudProfile {
 
 export const PROFILE_KEYS: readonly (keyof CloudProfile)[] = [
   'country',
+  'program',
   'monthsCovered',
   'incomeBucket',
   'housingPaymentBucket',
@@ -45,6 +47,7 @@ export function buildCloudProfile(analysis: Analysis, projectedHousingPayment: n
   const m = analysis.metrics;
   return {
     country: analysis.country,
+    program: analysis.program,
     monthsCovered: m.monthsCovered,
     incomeBucket: bucket(m.incomeBase, 500),
     housingPaymentBucket: bucket(projectedHousingPayment, 250),

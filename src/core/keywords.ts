@@ -7,19 +7,24 @@ import type { Category, Transaction } from './types';
  * Patterns cover English and French bank wording.
  */
 const RULES: { category: Category; pattern: RegExp; sign?: 'credit' | 'debit' }[] = [
-  { category: 'nsf_fee', pattern: /\b(nsf|insufficient funds|returned item fee|rejet de prelevement|rejet prlv|frais de rejet|commission d.intervention)\b/i, sign: 'debit' },
+  { category: 'nsf_fee', pattern: /\b(nsf|insufficient funds|returned item fee|rejet (de )?prelevement|rejet prlv|frais de rejet|commission d.intervention)\b/i, sign: 'debit' },
   { category: 'overdraft_fee', pattern: /\b(overdraft fee|od fee|overdraft charge|agios|interets debiteurs|frais de decouvert)\b/i, sign: 'debit' },
   { category: 'payday_loan', pattern: /\b(payday|cash advance loan|quick ?loan|pret express)\b/i },
   { category: 'gambling', pattern: /\b(casino|betting|sportsbook|poker|lottery|loterie|paris sportifs|pari sportif|turf|jeux d.argent)\b/i },
   { category: 'bnpl', pattern: /\b(pay in 4|buy now pay later|bnpl|paiement en 3 fois|paiement en 4 fois|3x sans frais|4x sans frais)\b/i, sign: 'debit' },
+  { category: 'p2p_transfer', pattern: /\b(zelle|venmo|paypal|cash ?app|lydia|paylib|wero)\b/i },
+  { category: 'cash_deposit', pattern: /\b(cash deposit|atm deposit|deposit cash|branch deposit cash|versement especes|depot especes|remise especes)\b/i, sign: 'credit' },
+  { category: 'refund', pattern: /\b(refund|reversal|return credit|merchandise return|avoir|annulation)\b/i, sign: 'credit' },
   { category: 'income_salary', pattern: /\b(payroll|salary|direct dep(osit)? payroll|salaire|paie|virement salaire)\b/i, sign: 'credit' },
   { category: 'housing', pattern: /\b(rent|loyer|mortgage pmt|echeance pret immo)\b/i, sign: 'debit' },
   { category: 'loan_payment', pattern: /\b(auto loan|car loan|student loan|loan pmt|loan payment|echeance pret|remboursement pret|credit auto|pret etudiant|pret perso)\b/i, sign: 'debit' },
   { category: 'credit_card_payment', pattern: /\b(credit card payment|card payment thank you|cc payment|remboursement carte)\b/i, sign: 'debit' },
   { category: 'cash_withdrawal', pattern: /\b(atm withdrawal|atm wd|retrait dab|retrait especes)\b/i, sign: 'debit' },
+  // Client payments for self-employed borrowers (credit side only).
+  { category: 'income_other', pattern: /\b(invoice|inv \d+|client payment|ach credit|payment from|deposit from|facture|honoraires)\b/i, sign: 'credit' },
   // Everyday spending: not what lenders look for, but classifying it here keeps the model for the hard cases.
   { category: 'utilities', pattern: /\b(power|electric|water|gas bill|wireless|mobile|internet|fibre|fiber|energie|electricite|eau|box)\b/i, sign: 'debit' },
-  { category: 'subscriptions', pattern: /\b(subscription|monthly|monthly plan|abonnement|streaming)\b/i, sign: 'debit' },
+  { category: 'subscriptions', pattern: /\b(subscription|monthly(?! (service|maintenance) fee)|abonnement|streaming)\b/i, sign: 'debit' },
   { category: 'groceries', pattern: /\b(grocery|groceries|supermarket|market|marche|supermarche|epicerie)\b/i, sign: 'debit' },
   { category: 'transport', pattern: /\b(fuel|gas station|parking|transit|metro|navigo|sncf|peage|carburant|station)\b/i, sign: 'debit' },
 ];

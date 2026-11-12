@@ -21,6 +21,9 @@ export const LEVER_IDS = [
   'exit_short_term_credit',
   'regular_savings',
   'review_obligations',
+  'document_cash',
+  'refresh_statements',
+  'build_funds',
 ] as const;
 export type LeverId = (typeof LEVER_IDS)[number];
 
@@ -33,6 +36,9 @@ const LEVER_FOR_CHECK: Record<CheckId, LeverId> = {
   payday_loans: 'exit_short_term_credit',
   savings_regularity: 'regular_savings',
   recurring_obligations: 'review_obligations',
+  cash_deposits: 'document_cash',
+  statement_recency: 'refresh_statements',
+  funds_to_close: 'build_funds',
 };
 
 const WEEK: Record<LeverId, number> = {
@@ -44,6 +50,9 @@ const WEEK: Record<LeverId, number> = {
   regular_savings: 2,
   reduce_debt_payments: 2,
   review_obligations: 1,
+  document_cash: 1,
+  refresh_statements: 1,
+  build_funds: 2,
 };
 
 /** The placeholders each lever may use. Anything else in the model's wording is rejected. */
@@ -56,6 +65,9 @@ export const LEVER_PLACEHOLDERS: Record<LeverId, readonly string[]> = {
   exit_short_term_credit: ['payday_count'],
   regular_savings: ['savings_months', 'months_required'],
   review_obligations: ['obligations_pending'],
+  document_cash: ['cash_count', 'cash_total'],
+  refresh_statements: ['statement_age_days', 'freshness_days'],
+  build_funds: ['funds_gap', 'cash_to_close'],
 };
 
 /** Default wording, used offline or whenever the model's wording fails validation. */
@@ -87,6 +99,18 @@ export const DEFAULT_TEXT: Record<LeverId, { action: string; why: string }> = {
   review_obligations: {
     action: 'Tell the app which of the {{obligations_pending}} recurring payment(s) are credit, and keep the contracts at hand.',
     why: 'Lenders count instalment plans and leases as debt even when the statement does not say loan.',
+  },
+  document_cash: {
+    action: 'Stop depositing cash before you apply, and note where the {{cash_count}} cash deposit(s) ({{cash_total}}) came from.',
+    why: 'Cash cannot be traced, so lenders may leave it out of the funds you can use.',
+  },
+  refresh_statements: {
+    action: 'Download the latest statements of every account, every page, with no missing month.',
+    why: 'Your last line is {{statement_age_days}} days old; lenders want statements within {{freshness_days}} days of the application.',
+  },
+  build_funds: {
+    action: 'Set aside the {{funds_gap}} still missing, in an account you will show, at least two statements before you apply.',
+    why: 'Lenders verify the {{cash_to_close}} needed at closing in your statements; recent large deposits would need sourcing.',
   },
   regular_savings: {
     action: 'Set up a standing monthly transfer to savings, even a small one.',
@@ -168,6 +192,15 @@ export function buildDraftPlan(analysis: Analysis, pack: RulePack, inputs: UserI
         return { savings_months: String(m.savingsMonths), months_required: String(m.monthsCovered) };
       case 'review_obligations':
         return { obligations_pending: String(m.obligationsPending) };
+      case 'document_cash':
+        return { cash_count: String(m.cashDepositCount), cash_total: money(m.cashDepositTotal) };
+      case 'refresh_statements':
+        return { statement_age_days: String(m.statementAgeDays), freshness_days: String(pack.freshnessDays ?? 45) };
+      case 'build_funds':
+        return {
+          funds_gap: money(Math.max(0, (inputs.cashToClose ?? 0) - (m.availableFunds ?? 0))),
+          cash_to_close: money(inputs.cashToClose ?? 0),
+        };
     }
   };
   const rank: Record<CheckStatus, number> = { alert: 0, watch: 1, ok: 2 };

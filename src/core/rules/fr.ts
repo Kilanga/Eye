@@ -2,6 +2,7 @@ import type { RulePack } from './types';
 
 export const FR: RulePack = {
   country: 'FR',
+  program: 'standard',
   currency: 'EUR',
   locale: 'fr-FR',
   displayName: 'France - mortgage lending rules',

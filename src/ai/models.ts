@@ -36,7 +36,7 @@ import {
 } from '../core/interview';
 import { validateModelItems, type StatementOptions } from '../core/import/statement-text';
 
-const CLOUD_MODEL = import.meta.env.VITE_CLOUD_MODEL || 'gemini-3.5-flash-lite';
+const CLOUD_MODEL = import.meta.env?.VITE_CLOUD_MODEL || 'gemini-3.5-flash-lite';
 /** Lines per on-device call: the local context window is small (about 4k tokens in). */
 const BATCH_SIZE = 40;
 

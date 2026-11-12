@@ -28,6 +28,9 @@ export const CATEGORIES = [
   'subscriptions',
   'transport',
   'cash_withdrawal',
+  'cash_deposit',
+  'p2p_transfer',
+  'refund',
   'other',
 ] as const;
 
@@ -71,7 +74,14 @@ export type CheckId =
   | 'gambling'
   | 'payday_loans'
   | 'savings_regularity'
-  | 'recurring_obligations';
+  | 'recurring_obligations'
+  | 'cash_deposits'
+  | 'statement_recency'
+  | 'funds_to_close';
+
+/** US loan programs; France has one standard set of rules. */
+export const PROGRAMS = ['conventional', 'fha', 'va', 'bank_statement', 'standard'] as const;
+export type LoanProgram = (typeof PROGRAMS)[number];
 
 export interface CheckResult {
   id: CheckId;
@@ -91,6 +101,14 @@ export interface UserInputs {
   projectedHousingPayment: number;
   /** The user's answer for each recurring payment flagged as possible credit (key = normalised label). */
   obligationDecisions?: Record<string, 'debt' | 'not_debt'>;
+  /** Bank statement loans: business account (expense ratio applies) or personal account. */
+  accountKind?: 'business' | 'personal';
+  /** Bank statement loans: share of business deposits treated as expenses (default 50%). */
+  expenseRatio?: number;
+  /** Cash needed at closing (down payment + closing costs), to check funds and reserves. */
+  cashToClose?: number;
+  /** Date of the application, YYYY-MM-DD (defaults to today): statements must be recent. */
+  applicationDate?: string;
 }
 
 export interface Metrics {
@@ -111,11 +129,20 @@ export interface Metrics {
   obligationsMonthly: number;
   /** Recurring payments that may be credit and wait for the user's answer. */
   obligationsPending: number;
+  cashDepositCount: number;
+  cashDepositTotal: number;
+  /** Days between the last statement line and the application date. */
+  statementAgeDays: number;
+  /** Sum of the latest known balance of each account, when the files carry balances. */
+  availableFunds?: number;
+  /** Monthly qualifying income, for bank statement loans: eligible deposits net of expenses. */
+  eligibleDepositsMonthly?: number;
   savingsMonths: number;
 }
 
 export interface Analysis {
   country: CountryCode;
+  program: LoanProgram;
   metrics: Metrics;
   checks: CheckResult[];
   /** Recurring payments that may be credit, with whether each one is counted. */

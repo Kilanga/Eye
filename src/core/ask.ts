@@ -77,6 +77,9 @@ export function guessQuery(question: string, months: string[]): StatementQuery {
     [/salary|pay ?check|payroll|salaire|income|revenu/, ['income_salary', 'income_other']],
     [/subscription|abonnement/, ['subscriptions']],
     [/fuel|transport|essence/, ['transport']],
+    [/zelle|venmo|paypal|p2p|person/, ['p2p_transfer']],
+    [/cash deposit|espèces|especes/, ['cash_deposit']],
+    [/refund|rembourse/, ['refund']],
     [/utilit|power|electric|energie|énergie|phone|mobile/, ['utilities']],
   ]);
   const intent: Intent = /how many|combien de fois|count/.test(q)
