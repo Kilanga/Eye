@@ -12,12 +12,12 @@ Built for the [#BuildHybridAI](https://firebasehybridaihackathon.devpost.com/) h
 
 ## Try it in two minutes (no install, no Gemini Nano needed)
 
-1. Open the hosted app and click **Maya - Austin, TX**, then **Analyse on this device**.
-2. Read the lights, confirm or dismiss the recurring payment, move the **What if?** sliders.
-3. Click **Get the underwriter's questions**, answer one, then **Write my explanation on this device**.
-4. Ask a question in **Ask your statements**.
-5. Click **Maya - 60 days later**, analyse again: the lights turn green.
-6. Click **Diego - Denver, self-employed**: a bank statement loan computed from 12 months of deposits, a regular payment to a person to explain, two cash deposits.
+1. Open [the hosted app](https://underwriters-eye.web.app), click **Try a sample file**, then **Maya - Austin, TX**, then **Review my statements**.
+2. Answer the first question (the $6,000 mobile deposit). In **What the lender will see**, read the lights, move the housing payment slider, and open **Every line, and who read it**.
+3. In **Your 90-day plan**, click **Reword the plan with Gemini**.
+4. In **Explain it to the lender**, click **Show the questions**, answer one, then **Write my explanation**.
+5. Ask a question in **Ask your statements**.
+6. Click **Maya - 60 days later** and review again: the lights turn green. Then **Diego - Denver, self-employed** (a bank statement loan computed from 12 months of deposits) and **Camille - Lyon** (French rules).
 7. Open **What left this device**: the outbound ledger shows every byte sent.
 
 Synthetic samples may use the cloud when Gemini Nano is missing, so the whole flow works on any computer. Real statements never do (see below). To test the import path, download Maya's sample files (CSV, PDF, PDF with an unusual layout) from the same screen.
@@ -202,7 +202,7 @@ Requirements: Node 24.12 or later (required by the Firebase SDK), Chrome desktop
 
 ```bash
 npm install
-npm test          # 51 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions
+npm test          # 86 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions, model checks
 npm run dev       # http://localhost:5173 (and /eval.html)
 ```
 
