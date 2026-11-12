@@ -98,3 +98,23 @@ describe('follow-up scans', () => {
     expect(compareSnapshots(us, fr)).toBeNull();
   });
 });
+
+describe('hidden debts', () => {
+  it('flags Maya\'s furniture plan and counts it only once confirmed', async () => {
+    const p = usAlmostReady();
+    const pack = getRulePack('US');
+    const base = { grossMonthlyIncome: 6400, projectedHousingPayment: 1850 };
+    const a = await runPipeline(p.accounts, pack, base, null);
+    expect(a.obligations).toHaveLength(1);
+    expect(a.obligations[0]).toMatchObject({ key: 'BRIGHTHOME', monthlyAmount: 60, confidence: 'medium', counted: false });
+    expect(a.checks.find((c) => c.id === 'recurring_obligations')?.status).toBe('watch');
+    const confirmed = await runPipeline(p.accounts, pack, { ...base, obligationDecisions: { BRIGHTHOME: 'debt' } }, null);
+    expect(confirmed.metrics.debtRatio).toBeCloseTo((595 + 60 + 1850) / 6400, 3);
+    expect(confirmed.checks.find((c) => c.id === 'recurring_obligations')?.status).toBe('ok');
+  });
+
+  it('does not flag rent, utilities, subscriptions or groceries', async () => {
+    const a = await runPipeline(frClean().accounts, getRulePack('FR'), { projectedHousingPayment: 700 }, null);
+    expect(a.obligations).toHaveLength(0);
+  });
+});

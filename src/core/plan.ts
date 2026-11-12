@@ -20,6 +20,7 @@ export const LEVER_IDS = [
   'stop_gambling',
   'exit_short_term_credit',
   'regular_savings',
+  'review_obligations',
 ] as const;
 export type LeverId = (typeof LEVER_IDS)[number];
 
@@ -31,6 +32,7 @@ const LEVER_FOR_CHECK: Record<CheckId, LeverId> = {
   gambling: 'stop_gambling',
   payday_loans: 'exit_short_term_credit',
   savings_regularity: 'regular_savings',
+  recurring_obligations: 'review_obligations',
 };
 
 const WEEK: Record<LeverId, number> = {
@@ -41,6 +43,7 @@ const WEEK: Record<LeverId, number> = {
   document_deposits: 1,
   regular_savings: 2,
   reduce_debt_payments: 2,
+  review_obligations: 1,
 };
 
 /** The placeholders each lever may use. Anything else in the model's wording is rejected. */
@@ -52,6 +55,7 @@ export const LEVER_PLACEHOLDERS: Record<LeverId, readonly string[]> = {
   stop_gambling: ['gambling_count', 'gambling_monthly'],
   exit_short_term_credit: ['payday_count'],
   regular_savings: ['savings_months', 'months_required'],
+  review_obligations: ['obligations_pending'],
 };
 
 /** Default wording, used offline or whenever the model's wording fails validation. */
@@ -79,6 +83,10 @@ export const DEFAULT_TEXT: Record<LeverId, { action: string; why: string }> = {
   exit_short_term_credit: {
     action: 'Repay and close the short-term loans before the statements you will submit begin.',
     why: '{{payday_count}} quick-loan line(s) read as a cash-flow warning.',
+  },
+  review_obligations: {
+    action: 'Tell the app which of the {{obligations_pending}} recurring payment(s) are credit, and keep the contracts at hand.',
+    why: 'Lenders count instalment plans and leases as debt even when the statement does not say loan.',
   },
   regular_savings: {
     action: 'Set up a standing monthly transfer to savings, even a small one.',
@@ -158,6 +166,8 @@ export function buildDraftPlan(analysis: Analysis, pack: RulePack, inputs: UserI
         return { payday_count: String(m.paydayCount) };
       case 'regular_savings':
         return { savings_months: String(m.savingsMonths), months_required: String(m.monthsCovered) };
+      case 'review_obligations':
+        return { obligations_pending: String(m.obligationsPending) };
     }
   };
   const rank: Record<CheckStatus, number> = { alert: 0, watch: 1, ok: 2 };

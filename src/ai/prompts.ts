@@ -37,8 +37,20 @@ export function letterPrompt(country: CountryCode, flags: string[]): string {
   return [
     `Write ${kind}, in English, covering these items: ${flags.join(', ')}.`,
     'Use ONLY placeholders in double curly braces for every personal detail, for example',
-    '{{applicant_name}}, {{deposit_amount}}, {{deposit_date}}, {{deposit_source}}, {{overdraft_dates}}, {{explanation}}.',
+    '{{applicant_name}}, {{date}}, {{deposit_amount}}, {{deposit_date}}, {{deposit_source}}. It MUST contain {{explanation}} once,',
+    'where the applicant\'s own explanation paragraph will be inserted on their device.',
     'Never invent names, amounts or dates. Keep it under 180 words, polite and factual.',
     'Return JSON: {"template": "...", "placeholders": ["..."]}.',
+  ].join('\n');
+}
+
+export function interviewPrompt(profile: CloudProfile, flagged: string[]): string {
+  return [
+    'You are a mortgage underwriter reviewing an application. You only see this summary, never the statements.',
+    `Country rules: ${profile.country}. Flagged checks: ${flagged.join(', ')}.`,
+    'Ask the 3 to 5 questions you would really ask the applicant about the flagged checks, one per check at most,',
+    'plain and short (max 30 words). Each question names the check id it is about. English.',
+    'Return JSON: {"questions": [{"checkId": "...", "question": "..."}]}.',
+    `Profile: ${JSON.stringify(profile)}`,
   ].join('\n');
 }

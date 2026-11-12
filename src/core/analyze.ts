@@ -1,3 +1,4 @@
+import { findRecurringObligations, isCounted } from './recurring';
 import type { RulePack } from './rules/types';
 import type {
   Account,
@@ -30,8 +31,15 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
   const incomeBase =
     pack.incomeBasis === 'gross' ? inputs.grossMonthlyIncome ?? monthlySalary : monthlySalary;
 
+  const obligations = findRecurringObligations(external).map((c) => ({
+    ...c,
+    counted: isCounted(c, inputs.obligationDecisions),
+  }));
+  const obligationsMonthly = obligations.filter((o) => o.counted).reduce((s, o) => s + o.monthlyAmount, 0);
+  const obligationsPending = obligations.filter((o) => !inputs.obligationDecisions?.[o.key]).length;
+
   const debtTxs = byCat('loan_payment', 'bnpl').filter((t) => t.amount < 0);
-  const monthlyDebtPayments = Math.abs(sum(debtTxs)) / monthsCovered;
+  const monthlyDebtPayments = Math.abs(sum(debtTxs)) / monthsCovered + obligationsMonthly;
   const debtRatio =
     incomeBase > 0 ? (monthlyDebtPayments + inputs.projectedHousingPayment) / incomeBase : Infinity;
 
@@ -72,6 +80,8 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
     paydayCount: paydayTxs.length,
     largeDepositCount: largeDepositTxs.length,
     largeDepositTotal: round2(sum(largeDepositTxs)),
+    obligationsMonthly: round2(obligationsMonthly),
+    obligationsPending,
     savingsMonths: savingsMonthSet.size,
   };
 
@@ -144,6 +154,18 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       detail: paydayTxs.length === 0 ? 'None in the period.' : `${paydayTxs.length} payday or quick-loan transaction(s).`,
       transactionIds: paydayTxs.map((t) => t.id),
     }),
+    recurring_obligations: () => ({
+      id: 'recurring_obligations',
+      status: obligationsPending === 0 ? 'ok' : 'watch',
+      title: 'Recurring payments that may be credit',
+      detail:
+        obligations.length === 0
+          ? 'No recurring payment that looks like hidden credit.'
+          : obligationsPending === 0
+            ? `${obligations.length} recurring payment(s) reviewed; ${fmtMoney(obligationsMonthly)} per month counted as debt.`
+            : `${obligationsPending} recurring payment(s) a lender may count as debt. Confirm or dismiss each one below.`,
+      transactionIds: obligations.flatMap((o) => o.transactionIds),
+    }),
     savings_regularity: () => ({
       id: 'savings_regularity',
       status: savingsMonthSet.size >= monthsCovered ? 'ok' : 'watch',
@@ -153,7 +175,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
     }),
   };
 
-  return { country: pack.country, metrics, checks: pack.checks.map((id) => builders[id]()) };
+  return { country: pack.country, metrics, checks: pack.checks.map((id) => builders[id]()), obligations };
 }
 
 function round2(n: number): number {

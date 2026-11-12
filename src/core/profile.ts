@@ -21,6 +21,8 @@ export interface CloudProfile {
   gamblingTransactions: number;
   paydayTransactions: number;
   savingsMonths: number;
+  /** Recurring payments flagged as possible credit, still unanswered. */
+  obligationsPending: number;
   checks: { id: CheckId; status: CheckStatus }[];
 }
 
@@ -35,6 +37,7 @@ export const PROFILE_KEYS: readonly (keyof CloudProfile)[] = [
   'gamblingTransactions',
   'paydayTransactions',
   'savingsMonths',
+  'obligationsPending',
   'checks',
 ] as const;
 
@@ -51,6 +54,7 @@ export function buildCloudProfile(analysis: Analysis, projectedHousingPayment: n
     gamblingTransactions: m.gamblingCount,
     paydayTransactions: m.paydayCount,
     savingsMonths: m.savingsMonths,
+    obligationsPending: m.obligationsPending,
     checks: analysis.checks.map((c) => ({ id: c.id, status: c.status })),
   };
 }

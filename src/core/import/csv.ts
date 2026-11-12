@@ -11,21 +11,21 @@ export interface ColumnMapping {
 }
 
 const ALIASES: Record<keyof ColumnMapping, string[]> = {
-  date: ['date', 'transaction date', 'posting date', 'posted date', 'date operation', 'date de l operation', 'date comptable'],
-  label: ['description', 'label', 'libelle', 'libelle operation', 'details', 'payee', 'memo', 'name', 'narrative'],
-  amount: ['amount', 'montant', 'montant eur', 'transaction amount'],
-  debit: ['debit', 'withdrawal', 'withdrawals', 'money out', 'paid out'],
-  credit: ['credit', 'deposit', 'deposits', 'money in', 'paid in'],
+  date: ['date', 'transaction date', 'posting date', 'posted date', 'trans date', 'date operation', 'date d operation', 'date de l operation', 'date comptable'],
+  label: ['description', 'transaction description', 'label', 'libelle', 'libelle operation', 'libelle de l operation', 'libelle simplifie', 'details', 'payee', 'merchant', 'memo', 'name', 'narrative', 'beneficiaire'],
+  amount: ['amount', 'montant', 'montant eur', 'montant en euros', 'montant de l operation', 'transaction amount'],
+  debit: ['debit', 'debits', 'withdrawal', 'withdrawals', 'money out', 'paid out', 'montant debit'],
+  credit: ['credit', 'credits', 'deposit', 'deposits', 'money in', 'paid in', 'montant credit'],
   balance: ['balance', 'solde', 'running balance'],
 };
 
 /** Splits CSV text into rows, handling quotes and the three usual delimiters. */
 export function parseCsvRows(text: string): string[][] {
-  const clean = text.replace(/^﻿/, '');
-  const firstLine = clean.split(/\r?\n/, 1)[0] ?? '';
-  const delimiter = [';', '\t', ','].reduce((best, d) =>
-    firstLine.split(d).length > firstLine.split(best).length ? d : best,
-  );
+  const clean = text.replace(/^\uFEFF/, '');
+  // Many exports start with a few lines of account details: judge the delimiter on the widest line.
+  const head = clean.split(/\r?\n/, 15);
+  const width = (d: string) => Math.max(...head.map((l) => l.split(d).length));
+  const delimiter = [';', '\t', ','].reduce((best, d) => (width(d) > width(best) ? d : best));
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';
@@ -100,9 +100,12 @@ export interface CsvImportResult {
 }
 
 export function importCsv(text: string, opts: CsvImportOptions): CsvImportResult {
-  const rows = parseCsvRows(text);
+  const all = parseCsvRows(text);
+  // The header is not always the first row (account number, period... above it).
+  const headerIndex = opts.mapping ? 0 : all.slice(0, 15).findIndex((r) => detectMapping(r) !== null);
+  const rows = all.slice(Math.max(headerIndex, 0));
   if (rows.length < 2) throw new Error('The CSV file has no data rows.');
-  const mapping = opts.mapping ?? detectMapping(rows[0]);
+  const mapping = opts.mapping ?? (headerIndex > -1 ? detectMapping(rows[0]) : null);
   if (!mapping) throw new Error('Could not find the date, description and amount columns.');
   const transactions: Transaction[] = [];
   let skippedRows = 0;

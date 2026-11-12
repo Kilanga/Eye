@@ -1,3 +1,4 @@
+import type { ObligationCandidate } from './recurring';
 /** Countries with a rule pack. Adding a country = adding a file in src/core/rules/. */
 export type CountryCode = 'US' | 'FR';
 
@@ -69,7 +70,8 @@ export type CheckId =
   | 'large_deposits'
   | 'gambling'
   | 'payday_loans'
-  | 'savings_regularity';
+  | 'savings_regularity'
+  | 'recurring_obligations';
 
 export interface CheckResult {
   id: CheckId;
@@ -87,6 +89,8 @@ export interface UserInputs {
   grossMonthlyIncome?: number;
   /** The mortgage payment the user is aiming for, all-in. */
   projectedHousingPayment: number;
+  /** The user's answer for each recurring payment flagged as possible credit (key = normalised label). */
+  obligationDecisions?: Record<string, 'debt' | 'not_debt'>;
 }
 
 export interface Metrics {
@@ -103,6 +107,10 @@ export interface Metrics {
   paydayCount: number;
   largeDepositCount: number;
   largeDepositTotal: number;
+  /** Recurring payments counted as debt (confirmed, or high confidence). */
+  obligationsMonthly: number;
+  /** Recurring payments that may be credit and wait for the user's answer. */
+  obligationsPending: number;
   savingsMonths: number;
 }
 
@@ -110,4 +118,6 @@ export interface Analysis {
   country: CountryCode;
   metrics: Metrics;
   checks: CheckResult[];
+  /** Recurring payments that may be credit, with whether each one is counted. */
+  obligations: (ObligationCandidate & { counted: boolean })[];
 }

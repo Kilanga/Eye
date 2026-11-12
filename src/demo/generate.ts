@@ -73,8 +73,15 @@ function maya(window: Month[]): Account[] {
     chk.add(d(y, m, 22), -15.99, 'STREAMBOX MONTHLY');
     for (let i = 0; i < 6; i++) chk.add(d(y, m, 2 + i * 4), -(60 + r() * 70), 'GREENLEAF MARKET #214');
     for (let i = 0; i < 3; i++) chk.add(d(y, m, 6 + i * 7), -(35 + r() * 25), 'QUICKFUEL STATION 88');
+    // Everyday lines with no keyword: what Gemini Nano is for.
+    chk.add(d(y, m, 9), -(5 + r() * 6), 'CAFE LUNA 0042');
+    chk.add(d(y, m, 13), -(15 + r() * 30), 'WELLCARE PHARMACY #318');
+    chk.add(d(y, m, 19), -(25 + r() * 60), 'MEGAMART ONLINE ORDER');
+    chk.add(d(y, m, 24), -(12 + r() * 20), 'RIDEGO *TRIP');
     chk.add(d(y, m, 25), -400, 'TRANSFER TO SAVINGS XXXX5521');
     sav.add(d(y, m, 26), 400, 'TRANSFER FROM CHECKING XXXX1180');
+    // A furniture payment plan that ended in October: looks like nothing, a lender counts it.
+    if (y === 2026 && (m === 9 || m === 10)) chk.add(d(y, m, 15), -60, 'BRIGHTHOME 0423 AUTOPAY');
     if (y === 2026 && m === 9) chk.add(d(y, m, 28), -35, 'OVERDRAFT FEE');
     if (y === 2026 && m === 10) {
       chk.add(d(y, m, 29), -35, 'OVERDRAFT FEE');

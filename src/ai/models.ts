@@ -23,8 +23,18 @@ import type { CloudProfile } from '../core/profile';
 import { finalisePlan, toCloudSteps, type DraftPlan, type FinalPlan, type PlanWording } from '../core/plan';
 import { assertSafeForCloud, type OutboundLedger } from '../core/ledger';
 import { CATEGORIES, type Category, type DataOrigin, type Transaction } from '../core/types';
-import { classificationPrompt, letterPrompt, planPrompt } from './prompts';
-import { classificationJsonSchema, letterSchema, planSchema } from './schemas';
+import { interviewPrompt, classificationPrompt, letterPrompt, planPrompt } from './prompts';
+import { classificationJsonSchema, interviewSchema, letterSchema, planSchema, statementJsonSchema } from './schemas';
+import { queryJsonSchema, queryPrompt, sanitiseQuery, type StatementQuery } from '../core/ask';
+import {
+  checkExplanation,
+  explanationPrompt,
+  sanitiseQuestions,
+  templateExplanation,
+  type Answer,
+  type InterviewQuestion,
+} from '../core/interview';
+import { validateModelItems, type StatementOptions } from '../core/import/statement-text';
 
 const CLOUD_MODEL = import.meta.env.VITE_CLOUD_MODEL || 'gemini-3.5-flash-lite';
 /** Lines per on-device call: the local context window is small (about 4k tokens in). */
@@ -43,6 +53,9 @@ export class HybridAI {
   private classifierDemo: GenerativeModel;
   private planner: GenerativeModel;
   private writer: GenerativeModel;
+  private interviewer: GenerativeModel;
+  /** On-device models, one per task (each carries its own output constraint). */
+  private local: Record<'pdf' | 'ask' | 'explain', Record<DataOrigin, GenerativeModel>>;
 
   constructor(app: FirebaseApp, private ledger: OutboundLedger) {
     this.ai = getAI(app, { backend: new GoogleAIBackend() });
@@ -79,6 +92,43 @@ export class HybridAI {
         generationConfig: { responseMimeType: 'application/json', responseSchema: letterSchema },
       },
     });
+    this.interviewer = getGenerativeModel(this.ai, {
+      mode: InferenceMode.ONLY_IN_CLOUD,
+      inCloudParams: {
+        model: CLOUD_MODEL,
+        generationConfig: { responseMimeType: 'application/json', responseSchema: interviewSchema },
+      },
+    });
+    this.local = {
+      pdf: this.pair(statementJsonSchema),
+      ask: this.pair(queryJsonSchema),
+      explain: this.pair(undefined, false),
+    };
+  }
+
+  /**
+   * user data -> ONLY_ON_DEVICE; synthetic demo data -> PREFER_ON_DEVICE with a cloud fallback,
+   * so the demo works for judges without Gemini Nano.
+   */
+  private pair(responseConstraint?: object, json = true): Record<DataOrigin, GenerativeModel> {
+    const onDeviceParams = {
+      createOptions: {
+        expectedInputs: [{ type: 'text' as const, languages: ['en', 'fr'] }],
+        expectedOutputs: [{ type: 'text' as const, languages: ['en'] }],
+      },
+      ...(responseConstraint ? { promptOptions: { responseConstraint } } : {}),
+    };
+    return {
+      user: getGenerativeModel(this.ai, { mode: InferenceMode.ONLY_ON_DEVICE, onDeviceParams }),
+      demo: getGenerativeModel(this.ai, {
+        mode: InferenceMode.PREFER_ON_DEVICE,
+        onDeviceParams,
+        inCloudParams: {
+          model: CLOUD_MODEL,
+          generationConfig: json ? { responseMimeType: 'application/json', temperature: 0 } : { temperature: 0.3 },
+        },
+      }),
+    };
   }
 
   /** Checks Chrome's built-in model without triggering a download. */
@@ -163,6 +213,76 @@ export class HybridAI {
     const result = await this.writer.generateContent(letterPrompt(profile.country, flags));
     this.ledger.setSource(entry, result.response.inferenceSource);
     return JSON.parse(result.response.text()) as LetterTemplate;
+  }
+
+  /**
+   * Reads PDF statement chunks the layout rules could not. Imported files are always treated
+   * as user data: on the device only. Every returned line is checked against the page text.
+   */
+  async readStatementChunks(
+    chunks: string[],
+    opts: StatementOptions,
+    year: number,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<Transaction[]> {
+    const out: Transaction[] = [];
+    for (const [i, chunk] of chunks.entries()) {
+      const prompt = [
+        'Extract every bank transaction from this statement text. Columns are separated by " | ".',
+        `Dates as YYYY-MM-DD (statement year ${year}; ${opts.country === 'US' ? 'MM/DD' : 'DD/MM'} order).`,
+        'amount: negative for money out (debit, withdrawal), positive for money in. Ignore balances and totals.',
+        'Answer with JSON only: {"items":[{"date":"...","label":"...","amount":0}]}.',
+        '',
+        chunk,
+      ].join('\n');
+      const result = await this.local.pdf.user.generateContent(prompt);
+      if (result.response.inferenceSource === 'in_cloud') throw new Error('Refusing a cloud answer for user data.');
+      out.push(...validateModelItems(parseJson<{ items?: [] }>(result.response.text())?.items ?? [], chunk, opts, out.length));
+      onProgress?.(i + 1, chunks.length);
+    }
+    return out;
+  }
+
+  /** Turns a question into a structured query, on the device. The statements are not in the prompt. */
+  async understandQuestion(question: string, months: string[], origin: DataOrigin): Promise<StatementQuery | null> {
+    if (origin === 'demo') this.ledger.record('demo_question', { characters: question.length });
+    const result = await this.local.ask[origin].generateContent(queryPrompt(question, months));
+    if (origin === 'user' && result.response.inferenceSource === 'in_cloud') throw new Error('Refusing a cloud answer for user data.');
+    return sanitiseQuery(parseJson(result.response.text()), months);
+  }
+
+  /** The underwriter's questions, from the summary profile only. */
+  async interviewQuestions(profile: CloudProfile, rawLabels: string[]): Promise<InterviewQuestion[]> {
+    const flagged = profile.checks.filter((c) => c.status !== 'ok').map((c) => c.id);
+    const payload = { ...profile };
+    assertSafeForCloud(payload, rawLabels);
+    const entry = this.ledger.record('interview', payload);
+    const result = await this.interviewer.generateContent(interviewPrompt(profile, flagged));
+    this.ledger.setSource(entry, result.response.inferenceSource);
+    return sanitiseQuestions(parseJson(result.response.text()), flagged);
+  }
+
+  /** The applicant's explanation paragraph, written on the device from their own answers. */
+  async writeExplanation(
+    answers: Answer[],
+    flagged: Transaction[],
+    currency: string,
+    origin: DataOrigin,
+  ): Promise<{ text: string; by: 'on_device' | 'in_cloud' | 'template' }> {
+    if (origin === 'demo') this.ledger.record('demo_explanation', { answers: answers.length });
+    const result = await this.local.explain[origin].generateContent(explanationPrompt(answers, flagged, currency));
+    const by = result.response.inferenceSource === 'in_cloud' ? 'in_cloud' : 'on_device';
+    if (origin === 'user' && by === 'in_cloud') throw new Error('Refusing a cloud answer for user data.');
+    const text = result.response.text().trim();
+    return checkExplanation(text, answers, flagged) ? { text, by } : { text: templateExplanation(answers), by: 'template' };
+  }
+}
+
+function parseJson<T = unknown>(text: string): T | null {
+  try {
+    return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) as T;
+  } catch {
+    return null;
   }
 }
 

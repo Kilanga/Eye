@@ -12,6 +12,7 @@ export const FR: RulePack = {
   checks: [
     'statement_coverage',
     'debt_ratio',
+    'recurring_obligations',
     'overdraft',
     'gambling',
     'payday_loans',

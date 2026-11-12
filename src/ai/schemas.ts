@@ -43,3 +43,28 @@ export const letterSchema = Schema.object({
     placeholders: Schema.array({ items: Schema.string() }),
   },
 });
+
+/** Cloud output schema for the lender interview questions. */
+export const interviewSchema = Schema.object({
+  properties: {
+    questions: Schema.array({
+      items: Schema.object({ properties: { checkId: Schema.string(), question: Schema.string() } }),
+    }),
+  },
+});
+
+/** On-device schema for reading a PDF statement chunk. */
+export const statementJsonSchema = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { date: { type: 'string' }, label: { type: 'string' }, amount: { type: 'number' } },
+        required: ['date', 'label', 'amount'],
+      },
+    },
+  },
+  required: ['items'],
+} as const;

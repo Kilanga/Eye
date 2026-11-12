@@ -5,7 +5,7 @@ import type { CheckId } from './types';
 /** One entry per request that left the device. Shown to the user in the "Outbound ledger" screen. */
 export interface LedgerEntry {
   at: string;
-  kind: 'plan' | 'letter_template' | 'demo_classification';
+  kind: 'plan' | 'letter_template' | 'interview' | 'demo_classification' | 'demo_question' | 'demo_explanation';
   /** Exactly what was sent, as JSON. */
   payload: string;
   bytes: number;
@@ -22,6 +22,7 @@ const CHECK_IDS: readonly CheckId[] = [
   'gambling',
   'payday_loans',
   'savings_regularity',
+  'recurring_obligations',
 ];
 const ALLOWED_STRINGS = new Set<string>(['US', 'FR', 'ok', 'watch', 'alert', ...CHECK_IDS, ...LEVER_IDS]);
 const ROOT_EXTRA_KEYS = ['flags', 'steps'];

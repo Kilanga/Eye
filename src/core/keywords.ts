@@ -17,6 +17,11 @@ const RULES: { category: Category; pattern: RegExp; sign?: 'credit' | 'debit' }[
   { category: 'loan_payment', pattern: /\b(auto loan|car loan|student loan|loan pmt|loan payment|echeance pret|remboursement pret|credit auto|pret etudiant|pret perso)\b/i, sign: 'debit' },
   { category: 'credit_card_payment', pattern: /\b(credit card payment|card payment thank you|cc payment|remboursement carte)\b/i, sign: 'debit' },
   { category: 'cash_withdrawal', pattern: /\b(atm withdrawal|atm wd|retrait dab|retrait especes)\b/i, sign: 'debit' },
+  // Everyday spending: not what lenders look for, but classifying it here keeps the model for the hard cases.
+  { category: 'utilities', pattern: /\b(power|electric|water|gas bill|wireless|mobile|internet|fibre|fiber|energie|electricite|eau|box)\b/i, sign: 'debit' },
+  { category: 'subscriptions', pattern: /\b(subscription|monthly|monthly plan|abonnement|streaming)\b/i, sign: 'debit' },
+  { category: 'groceries', pattern: /\b(grocery|groceries|supermarket|market|marche|supermarche|epicerie)\b/i, sign: 'debit' },
+  { category: 'transport', pattern: /\b(fuel|gas station|parking|transit|metro|navigo|sncf|peage|carburant|station)\b/i, sign: 'debit' },
 ];
 
 /** Strips accents so patterns can be written without them. */

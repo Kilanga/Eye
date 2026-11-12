@@ -1,9 +1,15 @@
-import type { HybridAI } from './ai/models';
+import { HybridAI } from './ai/models';
 import { analyze } from './core/analyze';
 import { applyKeywordRules } from './core/keywords';
 import type { RulePack } from './core/rules';
 import { matchInternalTransfers } from './core/transfers';
-import type { Account, Analysis, UserInputs } from './core/types';
+import type { Account, Analysis, CategorySource, UserInputs } from './core/types';
+
+export interface PipelineResult extends Analysis {
+  /** Who classified how many lines: the hybrid split, shown to the user. */
+  sources: Record<CategorySource, number>;
+  notes: string[];
+}
 
 export interface PipelineProgress {
   stage: 'transfers' | 'rules' | 'model' | 'analysis';
@@ -23,7 +29,8 @@ export async function runPipeline(
   inputs: UserInputs,
   ai: HybridAI | null,
   onProgress: (p: PipelineProgress) => void = () => {},
-): Promise<Analysis> {
+): Promise<PipelineResult> {
+  const notes: string[] = [];
   const all = accounts.flatMap((a) => a.transactions);
   all.forEach((t) => {
     delete t.category;
@@ -42,9 +49,19 @@ export async function runPipeline(
     for (const origin of ['user', 'demo'] as const) {
       const ids = new Set(accounts.filter((a) => a.origin === origin).map((a) => a.id));
       const txs = remaining.filter((t) => ids.has(t.accountId));
-      if (txs.length) {
-        await ai.classifyTransactions(txs, origin, (done, total) => onProgress({ stage: 'model', done, total }));
+      if (!txs.length) continue;
+      if (origin === 'user' && (await HybridAI.onDeviceStatus()) !== 'available') {
+        // Never fall back to the cloud for real statements: keep the rules' answer and say so.
+        txs.forEach((t) => {
+          t.category = 'other';
+          t.categorySource = 'unclassified';
+        });
+        notes.push(
+          `Gemini Nano is not ready on this device, so ${txs.length} line(s) the rules could not read stay unclassified. Prepare private mode and run the analysis again for a sharper result.`,
+        );
+        continue;
       }
+      await ai.classifyTransactions(txs, origin, (done, total) => onProgress({ stage: 'model', done, total }));
     }
   } else {
     remaining.forEach((t) => {
@@ -54,5 +71,7 @@ export async function runPipeline(
   }
 
   onProgress({ stage: 'analysis' });
-  return analyze(accounts, pack, inputs);
+  const sources: Record<CategorySource, number> = { rule: 0, on_device: 0, in_cloud: 0, unclassified: 0 };
+  all.forEach((t) => sources[t.categorySource ?? 'unclassified']++);
+  return { ...analyze(accounts, pack, inputs), sources, notes };
 }
