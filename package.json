@@ -1,0 +1,23 @@
+{
+  "name": "underwriters-eye",
+  "version": "0.1.0",
+  "private": true,
+  "description": "See your bank statements the way a lender will - before you apply. Hybrid on-device/cloud AI with Firebase AI Logic.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "firebase": "13.3.0"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  }
+}
