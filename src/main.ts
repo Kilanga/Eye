@@ -1,5 +1,15 @@
 import './styles.css';
-import { HybridAI, type LetterTemplate, type OnDeviceStatus, type Plan } from './ai/models';
+import { HybridAI, type LetterTemplate, type OnDeviceStatus } from './ai/models';
+import {
+  clearSnapshot,
+  compareSnapshots,
+  loadSnapshot,
+  saveSnapshot,
+  takeSnapshot,
+  type Comparison,
+  type Snapshot,
+} from './core/followup';
+import { buildDraftPlan, finalisePlan, type DraftPlan, type FinalPlan } from './core/plan';
 import { importCsv } from './core/import/csv';
 import { importOfx } from './core/import/ofx';
 import { fillTemplate, listPlaceholders } from './core/letter';
@@ -21,10 +31,22 @@ const state: {
   inputs: UserInputs;
   analysis?: Analysis;
   profile?: CloudProfile;
-  plan?: Plan;
+  draft?: DraftPlan;
+  plan?: FinalPlan;
   letter?: LetterTemplate;
   device: OnDeviceStatus;
-} = { country: 'US', accounts: [], inputs: { projectedHousingPayment: 0 }, device: 'no-api' };
+  /** Date of the statements: the demo personas carry their own, imported files use today. */
+  asOf?: string;
+  /** Previous scan, kept in memory for the session (and in localStorage only if the user opts in). */
+  previous: Snapshot | null;
+  comparison?: Comparison | null;
+} = {
+  country: 'US',
+  accounts: [],
+  inputs: { projectedHousingPayment: 0 },
+  device: 'no-api',
+  previous: loadSnapshot(),
+};
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const esc = (s: string) =>
@@ -68,17 +90,33 @@ ${ai ? '' : '<section><strong>Offline demo mode.</strong> <span class="note">No 
   <div class="progress hidden" id="an-progress"><div></div></div>
 </section>
 
+<section id="compare" class="hidden">
+  <h2>Since your last scan</h2>
+  <p class="note" id="compare-note"></p>
+  <ul class="compare" id="compare-list"></ul>
+</section>
+
 <section id="results" class="hidden">
   <h2>3. What your lender will see</h2>
   <ul class="checks" id="checks"></ul>
+  <div class="row" style="margin-top:12px">
+    <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="keep" /> Keep this summary (numbers and lights only, no statements) in this browser for a follow-up scan</label>
+    <button class="secondary" id="forget">Forget saved summary</button>
+  </div>
+</section>
+
+<section id="plan-section" class="hidden">
+  <h2>4. Your 90-day plan</h2>
+  <p class="note">Steps and figures are computed on this device. Rescan around day 30 and day 60 to watch the lights change.</p>
+  <div id="plan"></div>
 </section>
 
 <section id="cloud" class="hidden">
-  <h2>4. Your 90-day plan and explanation letter</h2>
-  <p class="note">Only this summary leaves your device. Nothing else.</p>
+  <h2>5. Better wording and an explanation letter</h2>
+  <p class="note">Optional. Only this summary leaves your device: no statement, no exact amount. The figures in the plan and the letter are filled in here afterwards.</p>
   <pre id="profile-preview"></pre>
-  <button id="send" ${ai ? '' : 'disabled'}>Send these numbers and get my plan</button>
-  <div id="plan"></div>
+  <button id="send" ${ai ? '' : 'disabled'}>Send these numbers</button>
+  ${ai ? '' : '<span class="note">Needs a Firebase config.</span>'}
   <div id="letter"></div>
 </section>
 
@@ -119,6 +157,7 @@ function renderDevice(): void {
 
 function renderChecks(): void {
   const a = state.analysis!;
+  const stepFor = new Map((state.plan?.steps ?? []).map((st) => [st.checkId, st]));
   const txById = new Map(state.accounts.flatMap((acc) => acc.transactions).map((t) => [t.id, t]));
   $('#checks').innerHTML = a.checks
     .map(
@@ -128,13 +167,35 @@ function renderChecks(): void {
           .map((id) => txById.get(id))
           .filter(Boolean)
           .map((t) => `${t!.date} &middot; ${esc(t!.rawLabel)} &middot; ${t!.amount.toFixed(2)} ${t!.currency}`)
-          .join('<br>')}</div></div></li>`,
+          .join('<br>')}</div>${
+          stepFor.has(c.id)
+            ? `<div class="plan-link">Plan, week ${stepFor.get(c.id)!.week}: ${esc(stepFor.get(c.id)!.action)}</div>`
+            : ''
+        }</div></li>`,
     )
     .join('');
   $('#results').classList.remove('hidden');
-  state.profile = buildCloudProfile(a, state.inputs.projectedHousingPayment);
-  $('#profile-preview').textContent = JSON.stringify(state.profile, null, 2);
+}
+
+function renderCloudPreview(): void {
+  const steps = state.draft ? state.draft.steps.map(({ week, checkId, lever }) => ({ week, checkId, lever })) : [];
+  $('#profile-preview').textContent = JSON.stringify({ ...state.profile, steps }, null, 2);
   $('#cloud').classList.remove('hidden');
+}
+
+function renderComparison(): void {
+  const c = state.comparison;
+  $('#compare').classList.toggle('hidden', !c);
+  if (!c) return;
+  const pack = getRulePack(state.country);
+  const title = (id: string) => state.analysis?.checks.find((x) => x.id === id)?.title ?? id;
+  $('#compare-note').textContent = `${c.daysBetween} day(s) later: ${c.improved} light(s) better, ${c.worsened} worse. ${pack.debtRatio.label}: ${c.debtRatioPct.before}% to ${c.debtRatioPct.after}%.`;
+  $('#compare-list').innerHTML = c.checks
+    .map(
+      (x) =>
+        `<li>${x.before ? `<span class="dot ${x.before}"></span>&rarr;` : ''}<span class="dot ${x.after}"></span>${esc(title(x.id))} <span class="trend ${x.trend}">${x.trend}</span></li>`,
+    )
+    .join('');
 }
 
 function renderLedger(): void {
@@ -149,12 +210,20 @@ function renderLedger(): void {
     : '<tr><td colspan="5" class="note">Nothing has left this device.</td></tr>';
 }
 
-function renderPlanAndLetter(): void {
-  if (state.plan) {
-    $('#plan').innerHTML = `<h3>90-day plan</h3><p>${esc(state.plan.summary)}</p><table><tr><th>Week</th><th>Action</th><th>Why</th></tr>${state.plan.actions
-      .map((x) => `<tr><td>${x.week}</td><td>${esc(x.action)}</td><td>${esc(x.why)}</td></tr>`)
-      .join('')}</table>`;
-  }
+function renderPlan(): void {
+  const p = state.plan;
+  $('#plan-section').classList.toggle('hidden', !p);
+  if (!p) return;
+  const wording = p.steps.some((st) => st.wording === 'cloud') ? 'Wording by Gemini, figures computed on this device.' : 'Built entirely on this device.';
+  $('#plan').innerHTML = `<p>${esc(p.summary)}</p><p class="note">${wording}</p>
+    <table><tr><th>Week</th><th>Action</th><th>Why it matters to the lender</th></tr>${p.steps
+      .map((x) => `<tr><td>${x.week}</td><td><span class="dot ${x.status}" style="display:inline-block;width:10px;height:10px"></span> ${esc(x.action)}</td><td>${esc(x.why)}</td></tr>`)
+      .join('')}
+    <tr class="milestone"><td>${p.cleanFromWeek}-12</td><td>Keep every statement clean: these are the months the lender will read.</td><td>Rescan around day 30 and day 60.</td></tr>
+    <tr class="milestone"><td>13</td><td>Rescan, check every light, then apply.</td><td></td></tr></table>`;
+}
+
+function renderLetter(): void {
   if (state.letter) {
     const keys = listPlaceholders(state.letter.template);
     $('#letter').innerHTML = `<h3>Explanation letter</h3><p class="note">The cloud wrote a template with blanks. Fill them here: they stay on this device.</p>
@@ -168,6 +237,25 @@ function renderPlanAndLetter(): void {
     document.querySelectorAll('[data-ph]').forEach((i) => i.addEventListener('input', update));
     update();
   }
+}
+
+/** After every analysis: local plan, follow-up comparison, cloud preview. */
+function afterAnalysis(): void {
+  const a = state.analysis!;
+  const pack = getRulePack(state.country);
+  state.profile = buildCloudProfile(a, state.inputs.projectedHousingPayment);
+  state.draft = buildDraftPlan(a, pack, state.inputs);
+  state.plan = finalisePlan(state.draft);
+  state.letter = undefined;
+  $('#letter').innerHTML = '';
+  const snap = takeSnapshot(state.profile, state.asOf ? new Date(`${state.asOf}T12:00:00Z`) : new Date());
+  state.comparison = state.previous ? compareSnapshots(state.previous, snap) : null;
+  state.previous = snap;
+  if (($('#keep') as HTMLInputElement).checked) saveSnapshot(snap);
+  renderComparison();
+  renderPlan();
+  renderChecks();
+  renderCloudPreview();
 }
 
 function setProgress(sel: string, ratio: number | null): void {
@@ -203,6 +291,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-demo]').forEach((btn) =>
     state.country = p.country;
     ($('#country') as HTMLSelectElement).value = p.country;
     state.accounts = p.accounts;
+    state.asOf = p.asOf;
     ($('#gross') as HTMLInputElement).value = p.grossMonthlyIncome ? String(p.grossMonthlyIncome) : '';
     ($('#housing') as HTMLInputElement).value = String(p.projectedHousingPayment);
     renderRulesNote();
@@ -228,6 +317,7 @@ $('#files').addEventListener('change', async (e) => {
     }
   }
   state.accounts = accounts;
+  state.asOf = undefined;
   renderAccounts();
 });
 
@@ -243,7 +333,7 @@ $('#analyze').addEventListener('click', async () => {
     state.analysis = await runPipeline(state.accounts, getRulePack(state.country), state.inputs, ai, (p) =>
       setProgress('#an-progress', p.total ? (p.done ?? 0) / p.total : 0.1),
     );
-    renderChecks();
+    afterAnalysis();
   } catch (err) {
     alertNote(`Analysis stopped: ${(err as Error).message}`);
   } finally {
@@ -261,9 +351,11 @@ $('#send').addEventListener('click', async () => {
   const labels = state.accounts.flatMap((a) => a.transactions.map((t) => t.rawLabel));
   try {
     ($('#send') as HTMLButtonElement).disabled = true;
-    state.plan = await ai.generatePlan(state.profile, labels);
+    state.plan = await ai.generatePlan(state.profile, state.draft!, labels);
     state.letter = await ai.generateLetterTemplate(state.profile, labels);
-    renderPlanAndLetter();
+    renderPlan();
+    renderChecks();
+    renderLetter();
   } catch (err) {
     alertNote(`Cloud step failed: ${(err as Error).message}`);
   } finally {
@@ -271,10 +363,21 @@ $('#send').addEventListener('click', async () => {
   }
 });
 
+$('#keep').addEventListener('change', (e) => {
+  if ((e.target as HTMLInputElement).checked && state.previous) saveSnapshot(state.previous);
+  if (!(e.target as HTMLInputElement).checked) clearSnapshot();
+});
+
+$('#forget').addEventListener('click', () => {
+  clearSnapshot();
+  ($('#keep') as HTMLInputElement).checked = false;
+});
+
 function alertNote(msg: string): void {
   $('#accounts-note').textContent = msg;
 }
 
+($('#keep') as HTMLInputElement).checked = loadSnapshot() !== null;
 ledger.onChange(renderLedger);
 renderRulesNote();
 renderAccounts();

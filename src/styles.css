@@ -43,3 +43,10 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line
 .progress > div { height: 100%; background: var(--accent); width: 0; transition: width 0.2s; }
 textarea { width: 100%; min-height: 180px; font: inherit; padding: 10px; border-radius: 8px; border: 1px solid var(--line); }
 .hidden { display: none; }
+.plan-link { margin-top: 8px; font-size: 0.85rem; padding: 6px 10px; border-left: 3px solid var(--accent); background: #f1f5ff; border-radius: 4px; }
+.compare { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.compare li { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.trend { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.trend.better { color: var(--ok); border-color: var(--ok); }
+.trend.worse { color: var(--alert); border-color: var(--alert); }
+.milestone { color: var(--muted); font-style: italic; }

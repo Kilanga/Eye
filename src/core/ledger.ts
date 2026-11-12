@@ -1,3 +1,4 @@
+import { LEVER_IDS } from './plan';
 import { PROFILE_KEYS } from './profile';
 import type { CheckId } from './types';
 
@@ -22,7 +23,9 @@ const CHECK_IDS: readonly CheckId[] = [
   'payday_loans',
   'savings_regularity',
 ];
-const ALLOWED_STRINGS = new Set<string>(['US', 'FR', 'ok', 'watch', 'alert', ...CHECK_IDS]);
+const ALLOWED_STRINGS = new Set<string>(['US', 'FR', 'ok', 'watch', 'alert', ...CHECK_IDS, ...LEVER_IDS]);
+const ROOT_EXTRA_KEYS = ['flags', 'steps'];
+const NESTED_KEYS = ['id', 'status', 'week', 'checkId', 'lever'];
 
 /**
  * Throws if a payload for real user data contains anything but whitelisted keys,
@@ -52,7 +55,10 @@ export function assertSafeForCloud(payload: unknown, rawLabels: Iterable<string>
     }
     if (value && typeof value === 'object') {
       for (const [k, v] of Object.entries(value)) {
-        const allowed = path === 'root' ? (PROFILE_KEYS as readonly string[]).includes(k) || k === 'flags' : k === 'id' || k === 'status';
+        const allowed =
+          path === 'root'
+            ? (PROFILE_KEYS as readonly string[]).includes(k) || ROOT_EXTRA_KEYS.includes(k)
+            : NESTED_KEYS.includes(k);
         if (!allowed) throw new PrivacyViolation(`Unexpected key ${path}.${k}`);
         visit(v, `${path}.${k}`);
       }

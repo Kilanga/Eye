@@ -102,6 +102,7 @@ export interface Metrics {
   gamblingMonthly: number;
   paydayCount: number;
   largeDepositCount: number;
+  largeDepositTotal: number;
   savingsMonths: number;
 }
 

@@ -71,6 +71,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
     gamblingMonthly: round2(Math.abs(sum(gamblingTxs)) / monthsCovered),
     paydayCount: paydayTxs.length,
     largeDepositCount: largeDepositTxs.length,
+    largeDepositTotal: round2(sum(largeDepositTxs)),
     savingsMonths: savingsMonthSet.size,
   };
 

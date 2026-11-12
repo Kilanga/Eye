@@ -1,5 +1,6 @@
 import { CATEGORIES, type CountryCode } from '../core/types';
 import type { CloudProfile } from '../core/profile';
+import { LEVER_PLACEHOLDERS, type CloudStep } from '../core/plan';
 
 export function classificationPrompt(labels: { i: number; label: string; amount: number }[]): string {
   return [
@@ -12,14 +13,22 @@ export function classificationPrompt(labels: { i: number; label: string; amount:
   ].join('\n');
 }
 
-export function planPrompt(profile: CloudProfile): string {
+export function planPrompt(profile: CloudProfile, steps: CloudStep[]): string {
   return [
-    'You are a plain-spoken coach helping someone prepare a mortgage application.',
+    'You are a plain-spoken coach helping someone prepare a mortgage or rental application.',
     `Country rules: ${profile.country}. You only see a summary profile, never statements.`,
-    'Write a 90-day plan (weeks 1 to 12) with at most 8 concrete actions, each tied to one check id.',
-    'Focus on checks with status "watch" or "alert". Do not give investment advice or recommend a lender.',
-    'Answer in English. Profile:',
-    JSON.stringify(profile),
+    'The steps of a 90-day plan are already decided by code. Your job is the wording only.',
+    'For each step i, write "action" (what to do, max 25 words) and "why" (the lender\'s view, max 25 words).',
+    'NEVER write a digit. Every figure must be a placeholder in double curly braces, chosen ONLY from that step\'s list.',
+    'Also write a "summary" of at most 2 sentences, with no digits and no placeholders.',
+    'No investment advice, no lender or product names. English.',
+    'Return JSON: {"summary": "...", "steps": [{"i": 0, "action": "...", "why": "..."}]}.',
+    '',
+    `Profile: ${JSON.stringify(profile)}`,
+    'Steps:',
+    ...steps.map(
+      (s, i) => `${i}\tweek ${s.week}\t${s.checkId}\t${s.lever}\tplaceholders: ${LEVER_PLACEHOLDERS[s.lever].map((p) => `{{${p}}}`).join(' ')}`,
+    ),
   ].join('\n');
 }
 

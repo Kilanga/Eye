@@ -6,7 +6,9 @@
  *      demo data -> InferenceMode.PREFER_ON_DEVICE (synthetic, so the cloud fallback is harmless and
  *                   lets judges without Gemini Nano see the whole pipeline)
  *  - generatePlan() / generateLetterTemplate(): Gemini in the cloud, InferenceMode.ONLY_IN_CLOUD,
- *      fed only with the summary profile, after assertSafeForCloud() and an entry in the ledger.
+ *      fed only with the summary profile (plus, for the plan, the step skeleton as enums), after
+ *      assertSafeForCloud() and an entry in the ledger. The plan's figures are computed and
+ *      filled in locally (src/core/plan.ts): the model writes words, never numbers.
  */
 import type { FirebaseApp } from 'firebase/app';
 import {
@@ -18,6 +20,7 @@ import {
   type GenerativeModel,
 } from 'firebase/ai';
 import type { CloudProfile } from '../core/profile';
+import { finalisePlan, toCloudSteps, type DraftPlan, type FinalPlan, type PlanWording } from '../core/plan';
 import { assertSafeForCloud, type OutboundLedger } from '../core/ledger';
 import { CATEGORIES, type Category, type DataOrigin, type Transaction } from '../core/types';
 import { classificationPrompt, letterPrompt, planPrompt } from './prompts';
@@ -28,11 +31,6 @@ const CLOUD_MODEL = import.meta.env.VITE_CLOUD_MODEL || 'gemini-3.5-flash-lite';
 const BATCH_SIZE = 40;
 
 export type OnDeviceStatus = 'available' | 'downloadable' | 'downloading' | 'unavailable' | 'no-api';
-
-export interface Plan {
-  summary: string;
-  actions: { week: number; checkId: string; action: string; why: string }[];
-}
 
 export interface LetterTemplate {
   template: string;
@@ -137,12 +135,24 @@ export class HybridAI {
     }
   }
 
-  async generatePlan(profile: CloudProfile, rawLabels: string[]): Promise<Plan> {
-    assertSafeForCloud(profile, rawLabels);
-    const entry = this.ledger.record('plan', profile);
-    const result = await this.planner.generateContent(planPrompt(profile));
+  /**
+   * Sends the profile plus the plan skeleton (enums only) and asks for wording.
+   * The figures stay on the device; invalid wording falls back to the local text.
+   */
+  async generatePlan(profile: CloudProfile, draft: DraftPlan, rawLabels: string[]): Promise<FinalPlan> {
+    const steps = toCloudSteps(draft);
+    const payload = { ...profile, steps };
+    assertSafeForCloud(payload, rawLabels);
+    const entry = this.ledger.record('plan', payload);
+    const result = await this.planner.generateContent(planPrompt(profile, steps));
     this.ledger.setSource(entry, result.response.inferenceSource);
-    return JSON.parse(result.response.text()) as Plan;
+    let wording: PlanWording | undefined;
+    try {
+      wording = JSON.parse(result.response.text()) as PlanWording;
+    } catch {
+      wording = undefined;
+    }
+    return finalisePlan(draft, wording);
   }
 
   async generateLetterTemplate(profile: CloudProfile, rawLabels: string[]): Promise<LetterTemplate> {

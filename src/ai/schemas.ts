@@ -24,11 +24,10 @@ export const classificationJsonSchema = {
 export const planSchema = Schema.object({
   properties: {
     summary: Schema.string(),
-    actions: Schema.array({
+    steps: Schema.array({
       items: Schema.object({
         properties: {
-          week: Schema.integer(),
-          checkId: Schema.string(),
+          i: Schema.integer(),
           action: Schema.string(),
           why: Schema.string(),
         },
