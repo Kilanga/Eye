@@ -321,7 +321,7 @@ export class HybridAI {
     const by = result.response.inferenceSource === 'in_cloud' ? 'in_cloud' : 'on_device';
     if (origin === 'user' && by === 'in_cloud') throw new Error('Refusing a cloud answer for user data.');
     const text = tidyExplanation(result.response.text());
-    if (import.meta.env?.DEV && !checkExplanation(text, answers, flagged)) console.info('[dev] explanation not kept:', text);
+    if (import.meta.env.DEV && !checkExplanation(text, answers, flagged)) console.info('[dev] explanation not kept:', text);
     return checkExplanation(text, answers, flagged) ? { text, by } : { text: templateExplanation(answers), by: 'template' };
   }
 }
