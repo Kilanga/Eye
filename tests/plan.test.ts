@@ -118,3 +118,40 @@ describe('hidden debts', () => {
     expect(a.obligations).toHaveLength(0);
   });
 });
+
+describe('cloud wording that repeats what a placeholder already says', () => {
+  // Wording returned by gemini-3.5-flash-lite on the deployed site, Nov 2026.
+  it('falls back to local wording instead of "1 large deposit recent deposit" or "38.2% percent"', async () => {
+    const { draft } = await run(usAlmostReady());
+    const at = (lever: string) => draft.steps.findIndex((s) => s.lever === lever);
+    const plan = finalisePlan(draft, {
+      steps: [
+        { i: at('document_deposits'), action: 'Provide a clear paper trail for the {{large_deposit_count}} recent deposit totaling {{large_deposit_total}}.', why: 'Processors must verify all funds.' },
+        { i: at('stop_gambling'), action: 'Halt all activity related to the {{gambling_count}} recent entries totaling {{gambling_monthly}} immediately.', why: 'Underwriters look closely at spending.' },
+        { i: at('reduce_debt_payments'), action: 'Lower your ratio from {{current_ratio}} percent down to {{target_ratio}} percent.', why: 'Lenders have strict thresholds.' },
+        { i: at('overdraft_buffer'), action: 'Keep a cushion so {{overdraft_events}} do not happen again.', why: 'Lenders read every fee.' },
+      ],
+    });
+    expect(plan.steps[at('document_deposits')].wording).toBe('local');
+    expect(plan.steps[at('stop_gambling')].wording).toBe('local');
+    expect(plan.steps[at('reduce_debt_payments')].wording).toBe('local');
+    expect(plan.steps[at('overdraft_buffer')].wording).toBe('cloud');
+    expect(plan.steps.map((s) => s.action).join(' ')).not.toMatch(/% percent|deposit recent deposit/);
+  });
+
+  it('rejects a currency sign written next to an amount placeholder', () => {
+    expect(isValidWording('Save ${{funds_gap}} more.', ['funds_gap'])).toBe(false);
+    expect(isValidWording('Save {{funds_gap}} dollars more.', ['funds_gap'])).toBe(false);
+    expect(isValidWording('Save {{funds_gap}} more, in an account you will show.', ['funds_gap'])).toBe(true);
+  });
+
+  it('tells the model what each placeholder becomes', async () => {
+    const { planPrompt } = await import('../src/ai/prompts');
+    const { draft, profile } = await run(usAlmostReady());
+    const prompt = planPrompt(profile, toCloudSteps(draft));
+    expect(prompt).toContain('{{large_deposit_count}} = a number WITH its noun, like "2 large deposits"');
+    expect(prompt).toContain('{{current_ratio}} = a percentage WITH its % sign');
+    // The hints are examples only: none of Maya's own figures reach the prompt.
+    expect(prompt).not.toMatch(/\$141|1,709|6,000|38\.2/);
+  });
+});
