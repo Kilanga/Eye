@@ -31,7 +31,7 @@
   line-height: 1.55;
   color: var(--ink);
   background: var(--desk);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: normal;
 }
 *,
 *::before,
@@ -326,6 +326,20 @@ legend {
   flex-direction: column;
   gap: 0.3rem;
 }
+/* In a row of fields, labels, inputs and hints share tracks, so the inputs line up even when
+   one label wraps onto two lines. */
+.fields > .field {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 0.3rem;
+}
+.fields > .field > label {
+  align-self: end;
+}
+.fields > .field > .hint {
+  align-self: start;
+}
 .field label {
   font-weight: 600;
   font-size: 0.95rem;
@@ -466,8 +480,16 @@ textarea {
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: 0.6rem;
 }
+.samples li {
+  display: flex;
+}
 .sample {
   width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.15rem;
   text-align: left;
   padding: 0.75rem 0.9rem;
   background: #fff;
@@ -588,7 +610,7 @@ textarea {
 }
 .finding {
   display: grid;
-  grid-template-columns: 7.5rem minmax(0, 1fr);
+  grid-template-columns: 10.5rem minmax(0, 1fr);
   gap: 0.25rem 1.25rem;
   padding: 1rem 0;
   border-bottom: 1px solid var(--rule);
@@ -599,6 +621,9 @@ textarea {
   gap: 0.45rem;
   font-weight: 700;
   font-size: 0.95rem;
+}
+.verdict span {
+  white-space: nowrap;
 }
 .verdict svg {
   width: 1.15rem;
@@ -628,6 +653,11 @@ mark {
   padding: 0.05em 0.25em;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
+}
+/* The highlighter overhangs the text: pull it back so the words line up with the text below. */
+.finding.watch h3 span,
+.finding.alert h3 span {
+  margin-left: -0.25em;
 }
 .finding.alert h3 span,
 mark.fix {
@@ -825,15 +855,18 @@ summary {
   flex: 1;
 }
 .suggestions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
   gap: 0.5rem;
   margin: 0.75rem 0 0;
   padding: 0;
   list-style: none;
 }
 .suggestions button {
-  min-height: 2.5rem;
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  min-height: 2.75rem;
   padding: 0.35rem 0.8rem;
   border: 1px solid var(--rule-strong);
   border-radius: 4px;
@@ -1047,13 +1080,13 @@ footer {
   margin: 0.2rem 0 0.5rem;
 }
 .choices {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  grid-auto-rows: 1fr;
   gap: 0.4rem;
-  align-items: center;
 }
 .choice {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.4rem;
   min-height: 2.75rem;
@@ -1072,7 +1105,77 @@ footer {
   background: #eef2fb;
 }
 .choice input {
+  flex: none;
   accent-color: var(--pen);
   width: 1.05rem;
   height: 1.05rem;
+}
+
+/* Tables and figures keep columns of digits aligned. */
+table,
+.sim-result,
+.legend {
+  font-variant-numeric: tabular-nums;
+}
+.skip-q {
+  margin: 0.35rem 0 0;
+}
+.sample-files {
+  margin-top: 1rem;
+}
+.sample-files .note {
+  margin: 0 0 0.5rem;
+}
+.sample-file-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.btn.small {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  margin-top: 0;
+}
+
+/* The plan on a narrow screen: one step per block (week, what to do, why), not three thin
+   columns. The ARIA roles in the markup keep the table semantics with the new display. */
+@media (max-width: 40rem) {
+  table.plan thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  table.plan,
+  table.plan tbody {
+    display: block;
+  }
+  table.plan tr {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  table.plan td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  table.plan td.when {
+    font-weight: 700;
+  }
+  table.plan td.why {
+    color: var(--ink-2);
+    font-size: 0.95rem;
+  }
+  table.plan td.why:empty {
+    display: none;
+  }
+}
+/* The plan's cells are sentences: proportional figures read better there. */
+table.plan {
+  font-variant-numeric: normal;
 }

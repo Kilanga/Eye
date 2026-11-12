@@ -23,23 +23,23 @@ export interface Choice {
 
 /** Plain-language answers, by direction of the money. */
 export const CHOICES_IN: Choice[] = [
-  { category: 'income_other', label: 'Income from work or my business' },
+  { category: 'income_other', label: 'Business or freelance pay' },
   { category: 'income_salary', label: 'Salary' },
-  { category: 'refund', label: 'A refund' },
+  { category: 'refund', label: 'Refund' },
   { category: 'p2p_transfer', label: 'Money from a person' },
-  { category: 'internal_transfer', label: 'From another account of mine' },
+  { category: 'internal_transfer', label: 'From my other account' },
   { category: 'cash_deposit', label: 'Cash I deposited' },
   { category: 'other', label: 'Something else' },
 ];
 export const CHOICES_OUT: Choice[] = [
-  { category: 'loan_payment', label: 'A loan or instalment payment' },
+  { category: 'loan_payment', label: 'Loan or instalments' },
   { category: 'housing', label: 'Rent or housing' },
-  { category: 'utilities', label: 'A bill or subscription' },
+  { category: 'utilities', label: 'Bill or subscription' },
   { category: 'groceries', label: 'Everyday spending' },
   { category: 'p2p_transfer', label: 'Payment to a person' },
-  { category: 'internal_transfer', label: 'To another account of mine' },
+  { category: 'internal_transfer', label: 'To my other account' },
   { category: 'gambling', label: 'Betting or casino' },
-  { category: 'other', label: 'A business cost, or something else' },
+  { category: 'other', label: 'Business cost or other' },
 ];
 
 export interface Question {
