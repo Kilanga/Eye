@@ -1,4 +1,4 @@
-import type { Account, CountryCode, Transaction } from '../core/types';
+import type { Account, CountryCode, LoanProgram, Transaction } from '../core/types';
 
 /**
  * Synthetic statements for the demo and the tests. Every bank, employer and merchant
@@ -14,7 +14,23 @@ export interface DemoPersona {
   asOf: string;
   grossMonthlyIncome?: number;
   projectedHousingPayment: number;
+  program?: LoanProgram;
+  accountKind?: 'business' | 'personal';
+  cashToClose?: number;
   accounts: Account[];
+}
+
+/** Adds a running balance, in date order, as statements print it. */
+function withBalances(txs: Transaction[], start: number): Transaction[] {
+  let b = start;
+  txs
+    .slice()
+    .sort((x, y) => x.date.localeCompare(y.date))
+    .forEach((t) => {
+      b = Math.round((b + t.amount) * 100) / 100;
+      t.balance = b;
+    });
+  return txs;
 }
 
 function rng(seed: number): () => number {
@@ -167,7 +183,57 @@ export function frClean(): DemoPersona {
   };
 }
 
-export const DEMO_PERSONAS: (() => DemoPersona)[] = [usAlmostReady, usFollowUp30, usFollowUp60, frClean];
+/**
+ * US self-employed: a freelance designer applying for a bank statement loan. Twelve months of
+ * a business account (client payments, owner draws) and a personal account. Story: the ratio is
+ * just above the comfortable zone, a regular payment to a person needs explaining, and two cash
+ * deposits cannot be traced.
+ */
+export function usSelfEmployed(): DemoPersona {
+  const r = rng(11);
+  const biz = new Builder('us-biz', 'USD', 'US');
+  const per = new Builder('us-personal', 'USD', 'US');
+  const clients = ['ACH CREDIT HARBORLINE CO INV', 'CLIENT PAYMENT NORTHPEAK STUDIO', 'DEPOSIT FROM BLUEFERN AGENCY'];
+  for (let k = 0; k < 12; k++) {
+    const y = k < 2 ? 2025 : 2026;
+    const m = ((10 + k) % 12) + 1; // Nov 2025 .. Oct 2026
+    clients.forEach((c, i) => biz.add(d(y, m, 4 + i * 9), 3000 * (0.85 + r() * 0.3), c.endsWith('INV') ? `${c} ${1040 + k * 3 + i}` : c));
+    biz.add(d(y, m, 6), -54.99, 'DESIGNSUITE SUBSCRIPTION');
+    biz.add(d(y, m, 11), -(120 + r() * 80), 'ADS PLATFORM CHARGE');
+    biz.add(d(y, m, 18), -(300 + r() * 500), 'PRINTWORKS STUDIO SUPPLIES');
+    biz.add(d(y, m, 22), -(1200 + r() * 600), 'CONTRACTOR PAYMENT R CHEN DESIGN');
+    biz.add(d(y, m, 28), -4500, 'TRANSFER TO PERSONAL CHK 4410');
+    per.add(d(y, m, 28), 4500, 'TRANSFER FROM BUSINESS CHK 7702');
+    per.add(d(y, m, 1), -1400, 'RENT PAYMENT ASPEN COURT');
+    per.add(d(y, m, 7), -350, 'MESA AUTO LOAN PMT');
+    per.add(d(y, m, 15), -300, 'ZELLE PAYMENT TO MARIA LOPEZ');
+    per.add(d(y, m, 9), -(130 + r() * 30), 'CITY POWER & WATER');
+    for (let i = 0; i < 5; i++) per.add(d(y, m, 3 + i * 5), -(70 + r() * 90), 'GREENLEAF MARKET #214');
+    per.add(d(y, m, 20), -(250 + r() * 400), 'MEGAMART ONLINE ORDER');
+    per.add(d(y, m, 24), -(80 + r() * 200), 'CAFE LUNA 0042');
+  }
+  biz.add('2026-02-12', 118.4, 'REFUND PRINTWORKS STUDIO SUPPLIES');
+  biz.add('2026-03-20', 400, 'ZELLE FROM K NGUYEN');
+  per.add('2026-05-09', 900, 'CASH DEPOSIT BRANCH 044');
+  per.add('2026-08-14', 900, 'CASH DEPOSIT BRANCH 044');
+  return {
+    id: 'us-self-employed',
+    country: 'US',
+    title: 'Diego - Denver, self-employed (synthetic)',
+    description: 'Freelance designer, 12 months of business and personal statements, bank statement loan.',
+    asOf: '2026-10-31',
+    program: 'bank_statement',
+    accountKind: 'business',
+    projectedHousingPayment: 1650,
+    cashToClose: 30000,
+    accounts: [
+      { id: 'us-biz', name: 'Northwind Bank - Business checking', currency: 'USD', country: 'US', origin: 'demo', transactions: withBalances(biz.txs, 8000) },
+      { id: 'us-personal', name: 'Northwind Bank - Personal checking', currency: 'USD', country: 'US', origin: 'demo', transactions: withBalances(per.txs, 5000) },
+    ],
+  };
+}
+
+export const DEMO_PERSONAS: (() => DemoPersona)[] = [usAlmostReady, usFollowUp30, usFollowUp60, usSelfEmployed, frClean];
 
 /** Exports an account as CSV so the import screen can be tested with the same data. */
 export function accountToCsv(account: Account): string {

@@ -1,4 +1,4 @@
-import type { CheckId, CountryCode } from '../types';
+import type { CheckId, CountryCode, LoanProgram } from '../types';
 
 /**
  * A country rule pack. Thresholds are data, not code, so a new country is a new file.
@@ -8,6 +8,7 @@ import type { CheckId, CountryCode } from '../types';
  */
 export interface RulePack {
   country: CountryCode;
+  program: LoanProgram;
   currency: string;
   locale: string;
   /** Short generic name shown in the UI. */
@@ -15,7 +16,13 @@ export interface RulePack {
   /** How many months of statements lenders usually ask for. */
   statementMonths: number;
   /** Which income the debt ratio is computed on. */
-  incomeBasis: 'gross' | 'net';
+  incomeBasis: 'gross' | 'net' | 'deposits';
+  /** Bank statement loans: default share of business deposits treated as expenses. */
+  defaultExpenseRatio?: number;
+  /** Statements must be dated within this many days of the application. */
+  freshnessDays?: number;
+  /** Program-specific remarks added to a check's detail. */
+  checkNotes?: Partial<Record<CheckId, string>>;
   debtRatio: {
     /** Label shown to the user, e.g. "DTI" or "taux d'effort". */
     label: string;

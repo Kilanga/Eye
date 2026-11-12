@@ -17,7 +17,8 @@ Built for the [#BuildHybridAI](https://firebasehybridaihackathon.devpost.com/) h
 3. Click **Get the underwriter's questions**, answer one, then **Write my explanation on this device**.
 4. Ask a question in **Ask your statements**.
 5. Click **Maya - 60 days later**, analyse again: the lights turn green.
-6. Open **What left this device**: the outbound ledger shows every byte sent.
+6. Click **Diego - Denver, self-employed**: a bank statement loan computed from 12 months of deposits, a regular payment to a person to explain, two cash deposits.
+7. Open **What left this device**: the outbound ledger shows every byte sent.
 
 Synthetic samples may use the cloud when Gemini Nano is missing, so the whole flow works on any computer. Real statements never do (see below). To test the import path, download Maya's sample files (CSV, PDF, PDF with an unusual layout) from the same screen.
 
@@ -27,7 +28,9 @@ Synthetic samples may use the cloud when Gemini Nano is missing, so the whole fl
 |---|---|
 | Import CSV, OFX and **PDF** statements, several accounts, transfers between them matched | Device (code + Gemini Nano for unusual PDF layouts) |
 | Classify every line | Device: keyword rules first, Gemini Nano for the rest |
-| Lender checks per country (US, France): debt ratio, overdrafts, large deposits, gambling, short-term credit, savings, **hidden debts** | Device (code, unit-tested) |
+| Lender checks per country and **loan program** (US conventional, FHA, VA, bank statement loan for the self-employed; France): debt ratio, overdrafts, large deposits, gambling, short-term credit, savings, **hidden debts** and regular payments to a person, cash deposits, recent and complete statements, funds to close and reserves | Device (code, unit-tested) |
+| Self-employed income from 12 months of deposits: transfers, refunds, loan proceeds and peer-to-peer excluded, expense ratio applied | Device (code + Gemini Nano to tell revenue from the rest) |
+| Documents to gather for each light, and a gift letter filled in locally | Device |
 | What-if simulator on the debt ratio | Device (code) |
 | 90-day plan with exact figures | Device computes steps and figures; Gemini in the cloud may reword them |
 | Follow-up scans: before / after at day 30 and day 60 | Device |
@@ -85,7 +88,7 @@ The page `/eval.html` runs a labelled set of 198 statement lines (English and Fr
 
 | Run | Accuracy | On lines the rules miss | Rule coverage | Rule precision | Bytes sent |
 |---|---|---|---|---|---|
-| Rules only | 60.6% | - | 30.3% | 95.0% | 0 |
+| Rules only | 64.1% | - | 32.3% | 98.4% | 0 |
 | Rules + Gemini Nano | *to be measured on a machine with Nano* | | | | 0 |
 
 PDF import: the sample statements are generated, rendered to PDF and read back in the tests ([`tests/pdf.test.ts`](tests/pdf.test.ts)): every line, date and total matches.
@@ -109,7 +112,16 @@ Layouts as documented by [beancount.io](https://beancount.io/tools/csv-to-beanco
 
 ## Rule packs
 
-| | United States | France |
+US programs (pick one in the app):
+
+| Program | Statements | Income | Ratio: comfortable / limit | Program notes |
+|---|---|---|---|---|
+| Conventional | 2 months, within 45 days | Gross | 36% / about 50% | Large deposits above 50% of qualifying income |
+| FHA | 2 months | Gross | 43% / 50% with compensating factors | NSF fees can trigger manual underwriting |
+| VA | 2 months | Gross | 41% benchmark | Above 41%, residual income 20% over the guideline |
+| Bank statement loan | 12 months | Eligible deposits, minus 50% expenses for a business account (100% of deposits for a personal one) | 43% / 55% | CPA letter for a lower expense ratio |
+
+| | United States (conventional) | France |
 |---|---|---|
 | Statements | 2 months | 3 months, all accounts |
 | Ratio | Back-end DTI on **gross** income: comfortable 36%, QM reference 43%, about 50% ceiling | Taux d'effort on **net** income: 35% (HCSF) |
@@ -123,7 +135,7 @@ Requirements: Node 24.12 or later (required by the Firebase SDK), Chrome desktop
 
 ```bash
 npm install
-npm test          # 44 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions
+npm test          # 51 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions
 npm run dev       # http://localhost:5173 (and /eval.html)
 ```
 

@@ -19,6 +19,8 @@ export interface ObligationCandidate {
   monthlyAmount: number;
   months: number;
   confidence: Confidence;
+  /** `credit`: looks like a loan or a lease; `person`: regular payments to a person (private loan, child support...). */
+  kind: 'credit' | 'person';
   transactionIds: string[];
 }
 
@@ -74,9 +76,11 @@ export function findRecurringObligations(transactions: Transaction[]): Obligatio
   for (const [key, txs] of groups) {
     const months = new Set(txs.map((t) => t.date.slice(0, 7)));
     if (months.size < 2) continue;
+    const toPerson = txs.every((t) => t.category === 'p2p_transfer');
     const amounts = txs.map((t) => Math.abs(t.amount)).sort((a, b) => a - b);
     const median = amounts[Math.floor(amounts.length / 2)];
-    if (amounts.some((a) => Math.abs(a - median) > 0.1 * median)) continue; // not a fixed amount
+    // Payments to a person vary more than a loan instalment.
+    if (amounts.some((a) => Math.abs(a - median) > (toPerson ? 0.25 : 0.1) * median)) continue;
     if (txs.length > months.size * 2) continue; // several times a month: spending, not an instalment
     if (median < 25) continue; // too small to move a lender's ratio
     const strong = txs.some((t) => CREDIT_WORDING.test(t.rawLabel.normalize('NFD').replace(/[̀-ͯ]/g, '')));
@@ -85,7 +89,8 @@ export function findRecurringObligations(transactions: Transaction[]): Obligatio
       exampleLabel: txs[0].rawLabel,
       monthlyAmount: Math.round(median * 100) / 100,
       months: months.size,
-      confidence: strong ? 'high' : 'medium',
+      confidence: strong && !toPerson ? 'high' : 'medium',
+      kind: toPerson ? 'person' : 'credit',
       transactionIds: txs.map((t) => t.id),
     });
   }

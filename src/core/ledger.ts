@@ -1,6 +1,6 @@
 import { LEVER_IDS } from './plan';
 import { PROFILE_KEYS } from './profile';
-import type { CheckId } from './types';
+import { PROGRAMS, type CheckId } from './types';
 
 /** One entry per request that left the device. Shown to the user in the "Outbound ledger" screen. */
 export interface LedgerEntry {
@@ -23,8 +23,11 @@ const CHECK_IDS: readonly CheckId[] = [
   'payday_loans',
   'savings_regularity',
   'recurring_obligations',
+  'cash_deposits',
+  'statement_recency',
+  'funds_to_close',
 ];
-const ALLOWED_STRINGS = new Set<string>(['US', 'FR', 'ok', 'watch', 'alert', ...CHECK_IDS, ...LEVER_IDS]);
+const ALLOWED_STRINGS = new Set<string>(['US', 'FR', 'ok', 'watch', 'alert', ...CHECK_IDS, ...LEVER_IDS, ...PROGRAMS]);
 const ROOT_EXTRA_KEYS = ['flags', 'steps'];
 const NESTED_KEYS = ['id', 'status', 'week', 'checkId', 'lever'];
 

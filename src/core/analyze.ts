@@ -28,8 +28,19 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
   const salaryTxs = byCat('income_salary').filter((t) => t.amount > 0);
   const monthlySalary = sum(salaryTxs) / monthsCovered;
   const monthlyIncome = sum(byCat('income_salary', 'income_other').filter((t) => t.amount > 0)) / monthsCovered;
+  // Bank statement loans: every external deposit counts except transfers, refunds, loan
+  // proceeds and peer-to-peer payments, averaged per month, net of the expense ratio.
+  const INELIGIBLE: Category[] = ['internal_transfer', 'refund', 'p2p_transfer', 'payday_loan', 'loan_payment', 'bnpl'];
+  const eligibleDeposits = external.filter((t) => t.amount > 0 && !(t.category && INELIGIBLE.includes(t.category)));
+  const expenseRatio =
+    inputs.expenseRatio ?? (inputs.accountKind === 'personal' ? 0 : pack.defaultExpenseRatio ?? 0);
+  const eligibleDepositsMonthly = (sum(eligibleDeposits) / monthsCovered) * (1 - expenseRatio);
   const incomeBase =
-    pack.incomeBasis === 'gross' ? inputs.grossMonthlyIncome ?? monthlySalary : monthlySalary;
+    pack.incomeBasis === 'deposits'
+      ? eligibleDepositsMonthly
+      : pack.incomeBasis === 'gross'
+        ? inputs.grossMonthlyIncome ?? monthlySalary
+        : monthlySalary;
 
   const obligations = findRecurringObligations(external).map((c) => ({
     ...c,
@@ -57,9 +68,34 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
           (t) =>
             t.amount > share * incomeBase &&
             t.category !== 'income_salary' &&
-            t.category !== 'internal_transfer',
+            t.category !== 'internal_transfer' &&
+            // For self-employed borrowers, client payments are the income itself.
+            !(pack.incomeBasis === 'deposits' && t.category === 'income_other'),
         )
       : [];
+
+  const cashTxs = byCat('cash_deposit').filter((t) => t.amount > 0);
+
+  // Statements must be recent (US: dated within 45 days of the application) and continuous.
+  const lastDate = all.reduce((m, t) => (t.date > m ? t.date : m), '');
+  const reference = inputs.applicationDate ?? new Date().toISOString().slice(0, 10);
+  const statementAgeDays = lastDate ? Math.max(0, Math.round((Date.parse(reference) - Date.parse(lastDate)) / 864e5)) : 0;
+  const gaps = accounts.flatMap((a) => {
+    const ms = [...new Set(a.transactions.map((t) => t.date.slice(0, 7)))].sort();
+    const missing: string[] = [];
+    for (let i = 1; i < ms.length; i++) {
+      const [y0, m0] = ms[i - 1].split('-').map(Number);
+      const [y1, m1] = ms[i].split('-').map(Number);
+      for (let k = (y1 - y0) * 12 + (m1 - m0) - 1; k > 0; k--) missing.push(`${a.name}: a month before ${ms[i]}`);
+    }
+    return missing;
+  });
+
+  // Funds: the latest known balance of each account, when the files carry balances.
+  const latestBalances = accounts
+    .map((a) => a.transactions.filter((t) => t.balance !== undefined).sort((x, y) => x.date.localeCompare(y.date)).at(-1)?.balance)
+    .filter((b): b is number => b !== undefined);
+  const availableFunds = latestBalances.length ? latestBalances.reduce((s, b) => s + b, 0) : undefined;
 
   const savingsMonthSet = new Set(
     all
@@ -83,6 +119,11 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
     largeDepositTotal: round2(sum(largeDepositTxs)),
     obligationsMonthly: round2(obligationsMonthly),
     obligationsPending,
+    cashDepositCount: cashTxs.length,
+    cashDepositTotal: round2(sum(cashTxs)),
+    statementAgeDays,
+    ...(availableFunds !== undefined ? { availableFunds: round2(availableFunds) } : {}),
+    ...(pack.incomeBasis === 'deposits' ? { eligibleDepositsMonthly: round2(eligibleDepositsMonthly) } : {}),
     savingsMonths: savingsMonthSet.size,
   };
 
@@ -167,6 +208,56 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
             : `${obligationsPending} recurring payment(s) a lender may count as debt. Confirm or dismiss each one below.`,
       transactionIds: obligations.flatMap((o) => o.transactionIds),
     }),
+    cash_deposits: () => ({
+      id: 'cash_deposits',
+      status: cashTxs.length === 0 ? 'ok' : 'watch',
+      title: 'Cash deposits',
+      detail: cashTxs.length
+        ? `${cashTxs.length} cash deposit(s), ${fmtMoney(metrics.cashDepositTotal)} in total. Cash cannot be traced: lenders may not count it toward the funds you need.`
+        : 'No cash deposit in the period.',
+      transactionIds: cashTxs.map((t) => t.id),
+    }),
+    statement_recency: () => {
+      const limit = pack.freshnessDays ?? 45;
+      const status: CheckStatus = statementAgeDays > limit ? 'alert' : gaps.length ? 'watch' : 'ok';
+      return {
+        id: 'statement_recency',
+        status,
+        title: 'Recent and complete statements',
+        detail:
+          statementAgeDays > limit
+            ? `The last line is ${statementAgeDays} days old; statements must be dated within ${limit} days of the application. Download the latest ones.`
+            : gaps.length
+              ? `Missing month(s): ${gaps.slice(0, 3).join('; ')}. Lenders want consecutive statements, every page.`
+              : `Consecutive months, last line ${statementAgeDays} day(s) before the application date.`,
+        transactionIds: [],
+      };
+    },
+    funds_to_close: () => {
+      const need = inputs.cashToClose ?? 0;
+      const monthlyHousing = inputs.projectedHousingPayment || 1;
+      if (availableFunds === undefined) {
+        return {
+          id: 'funds_to_close',
+          status: 'watch',
+          title: 'Funds to close and reserves',
+          detail: `You need ${fmtMoney(need)} at closing, but these files carry no balance. Add statements with a balance column (most PDFs have one).`,
+          transactionIds: [],
+        };
+      }
+      const left = availableFunds - need;
+      const reserves = left / monthlyHousing;
+      return {
+        id: 'funds_to_close',
+        status: left < 0 ? 'alert' : reserves < 2 ? 'watch' : 'ok',
+        title: 'Funds to close and reserves',
+        detail:
+          left < 0
+            ? `Balances total ${fmtMoney(availableFunds)}; ${fmtMoney(-left)} short of the ${fmtMoney(need)} needed at closing.`
+            : `Balances total ${fmtMoney(availableFunds)}: after ${fmtMoney(need)} at closing, ${reserves.toFixed(1)} month(s) of housing payments remain in reserve. Three or more is a recognised strength.`,
+        transactionIds: [],
+      };
+    },
     savings_regularity: () => ({
       id: 'savings_regularity',
       status: savingsMonthSet.size >= monthsCovered ? 'ok' : 'watch',
@@ -176,7 +267,15 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
     }),
   };
 
-  return { country: pack.country, metrics, checks: pack.checks.map((id) => builders[id]()), obligations };
+  const checks = pack.checks
+    // Funds are only checked when the user says how much is needed at closing.
+    .filter((id) => id !== 'funds_to_close' || (inputs.cashToClose ?? 0) > 0)
+    .map((id) => {
+      const c = builders[id]();
+      const note = pack.checkNotes?.[id];
+      return note && c.status !== 'ok' ? { ...c, detail: `${c.detail} ${note}` } : c;
+    });
+  return { country: pack.country, program: pack.program, metrics, checks, obligations };
 }
 
 function round2(n: number): number {

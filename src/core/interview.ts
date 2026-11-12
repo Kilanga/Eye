@@ -23,6 +23,9 @@ export const DEFAULT_QUESTIONS: Partial<Record<CheckId, string>> = {
   recurring_obligations: 'Is the recurring payment a loan, a lease or an instalment plan? When does it end?',
   savings_regularity: 'Do you keep savings elsewhere that these statements do not show?',
   statement_coverage: 'Are there other accounts the lender should see?',
+  cash_deposits: 'Where did the cash you deposited come from?',
+  statement_recency: 'Are any statements or pages missing for these accounts?',
+  funds_to_close: 'Where will the rest of the money needed at closing come from (savings elsewhere, a gift, a sale)?',
 };
 
 export function defaultQuestions(checks: CheckResult[]): InterviewQuestion[] {
