@@ -92,13 +92,28 @@ PDF import: the sample statements are generated, rendered to PDF and read back i
 
 Honest caveat: the same author wrote the keyword rules and the labelled set; about half the lines were written with wording the rules do not cover on purpose.
 
+## Bank exports
+
+CSV exports usually cover only the last few months, and lenders ask for the official monthly statements, which are PDFs. Both are read on the device. The CSV reader finds the header row even below a summary block, reads files with no header at all, separate debit and credit columns, unsigned amounts with a debit/credit column, and four-decimal amounts. Tested against the documented layouts of large US banks ([`tests/bank-formats.test.ts`](tests/bank-formats.test.ts), invented rows):
+
+| Layout | Seen at |
+|---|---|
+| Details, Posting Date, Description, Amount, Type, Balance | Chase checking |
+| Summary block, then Date, Description, Amount, Running Bal. | Bank of America |
+| No header: date, amount, `*`, empty, description | Wells Fargo |
+| Transaction Date, Transaction Amount (unsigned), Transaction Type, Transaction Description, Balance | Capital One 360 |
+| Status, Date, Description, Debit, Credit | Citi |
+| Date, Transaction, Name, Memo, Amount (four decimals) | U.S. Bank |
+
+Layouts as documented by [beancount.io](https://beancount.io/tools/csv-to-beancount/wells-fargo), [Tiller](https://tiller.com/export-us-bank-transactions/) and others; bank names are used only to describe file layouts and appear nowhere in the app.
+
 ## Rule packs
 
 | | United States | France |
 |---|---|---|
 | Statements | 2 months | 3 months, all accounts |
 | Ratio | Back-end DTI on **gross** income: comfortable 36%, QM reference 43%, about 50% ceiling | Taux d'effort on **net** income: 35% (HCSF) |
-| Checks | Overdraft and NSF, large deposits above 50% of monthly income, payday loans, gambling, recurring payments that are really credit | Overdrafts and rejected debits, gambling, short-term credit, regular savings, recurring payments that are really credit |
+| Checks | Overdraft and NSF, large deposits above 50% of monthly qualifying income ([Fannie Mae B3-4.2-02](https://selling-guide.fanniemae.com/sel/b3-4.2-02/depository-accounts)), payday loans, gambling, recurring payments that are really credit | Overdrafts and rejected debits, gambling, short-term credit, regular savings, recurring payments that are really credit |
 
 Sources and the date each was checked are in [`src/core/rules/`](src/core/rules/). Adding a country means adding one file.
 
@@ -108,7 +123,7 @@ Requirements: Node 24.12 or later (required by the Firebase SDK), Chrome desktop
 
 ```bash
 npm install
-npm test          # 35 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions
+npm test          # 44 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions
 npm run dev       # http://localhost:5173 (and /eval.html)
 ```
 

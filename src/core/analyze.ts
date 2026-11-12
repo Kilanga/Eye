@@ -51,10 +51,11 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
 
   const share = pack.largeDepositShareOfMonthlyIncome;
   const largeDepositTxs =
-    share !== undefined && monthlySalary > 0
+    // Fannie Mae B3-4.2-02: a large deposit exceeds 50% of the total monthly *qualifying* income.
+    share !== undefined && incomeBase > 0
       ? external.filter(
           (t) =>
-            t.amount > share * monthlySalary &&
+            t.amount > share * incomeBase &&
             t.category !== 'income_salary' &&
             t.category !== 'internal_transfer',
         )
@@ -131,7 +132,7 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
       detail:
         largeDepositTxs.length === 0
           ? 'No non-salary deposit above the threshold.'
-          : `${largeDepositTxs.length} deposit(s) above ${Math.round((share ?? 0) * 100)}% of monthly income: the lender will ask where the money came from.`,
+          : `${largeDepositTxs.length} deposit(s) above ${Math.round((share ?? 0) * 100)}% of monthly qualifying income (${fmtMoney((share ?? 0) * incomeBase)}): the lender will ask where the money came from.`,
       transactionIds: largeDepositTxs.map((t) => t.id),
     }),
     gambling: () => {
