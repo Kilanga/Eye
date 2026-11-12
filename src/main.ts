@@ -327,6 +327,7 @@ document.querySelector('#app')!.innerHTML = `
         <div><h3>Stays on this device</h3><ul id="stays"><li>Nothing added yet.</li></ul></div>
         <div><h3>Can be sent to Gemini in the cloud</h3><ul id="leaves"><li>Nothing yet.</li></ul></div>
       </div>
+      <p class="note">The cloud model is Google's Gemini API, reached through Firebase AI Logic, under the <a href="https://ai.google.dev/terms">Gemini API terms</a> and <a href="https://policies.google.com/privacy">Google's privacy policy</a>. On its free tier Google may use what it receives to improve its products, and asks developers not to send personal information: that is why only rounded numbers and check names ever leave this device, and only when you press a cloud button.</p>
       <details><summary>The exact summary, as it would be sent</summary><pre id="payload" tabindex="0">{}</pre></details>
       <h3>Every request sent</h3>
       <p class="note">Byte for byte, with where Firebase says the answer came from.</p>
@@ -1043,7 +1044,9 @@ $('#clarify').addEventListener('click', (e) => {
   if (b.dataset.skip) {
     state.answered[b.dataset.skip] = 'skip';
     renderClarify();
-    $<HTMLElement>('#clarify input[type="radio"]')?.focus();
+    const left = $$('#clarify .question-set').length;
+    announce(left ? `Skipped. ${left === 1 ? 'One question' : `${left} questions`} left.` : 'Skipped. No more questions.');
+    ($<HTMLElement>('#clarify input[type="radio"]') ?? $<HTMLElement>('#h-review'))?.focus();
   }
   if (b.id === 'forget-answers') {
     state.personalRules = {};
@@ -1130,7 +1133,7 @@ $('#write-explanation').addEventListener('click', async () => {
           ? 'Written by Gemini Nano on this device.'
           : r.by === 'in_cloud'
             ? 'Written in the cloud (sample files only).'
-            : 'The model added facts you did not give, so your own words were kept.';
+            : 'The paragraph from the model did not pass the checks (a number you did not give, or written from the lender side), so your own words were kept.';
     }
   } catch (err) {
     by = `The on-device model is not available (${(err as Error).message}); written from your answers.`;

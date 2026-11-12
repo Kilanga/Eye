@@ -65,7 +65,10 @@ export function findRecurringObligations(transactions: Transaction[]): Obligatio
   for (const t of transactions) {
     if (t.amount >= 0 || t.isInternalTransfer) continue;
     const strong = CREDIT_WORDING.test(t.rawLabel.normalize('NFD').replace(/[̀-ͯ]/g, ''));
-    if (t.category && SETTLED.has(t.category) && !strong) continue;
+    const guessed = t.categorySource === 'on_device' || t.categorySource === 'in_cloud';
+    // A model's guess never clears a check: a fixed monthly payment it called "housing" or
+    // "shopping" is still put to the user.
+    if (t.category && SETTLED.has(t.category) && !strong && !guessed) continue;
     if (t.category === 'loan_payment' || t.category === 'bnpl') continue; // already in the ratio
     const key = normaliseLabel(t.rawLabel);
     if (!key) continue;
