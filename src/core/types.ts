@@ -36,6 +36,31 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number];
 
+/** How a category reads in the interface. */
+export const CATEGORY_NAMES: Record<Category, string> = {
+  income_salary: 'Salary',
+  income_other: 'Other income',
+  internal_transfer: 'Between my accounts',
+  housing: 'Rent or housing',
+  loan_payment: 'Loan payment',
+  credit_card_payment: 'Credit card payment',
+  bnpl: 'Instalment plan',
+  payday_loan: 'Payday loan',
+  gambling: 'Betting or casino',
+  overdraft_fee: 'Overdraft fee',
+  nsf_fee: 'Returned-payment fee',
+  savings: 'Savings',
+  groceries: 'Groceries',
+  utilities: 'Utilities',
+  subscriptions: 'Subscription',
+  transport: 'Transport',
+  cash_withdrawal: 'Cash withdrawal',
+  cash_deposit: 'Cash deposit',
+  p2p_transfer: 'Payment to or from a person',
+  refund: 'Refund',
+  other: 'Other',
+};
+
 /** Who decided the category of a transaction. */
 export type CategorySource = 'rule' | 'user' | 'on_device' | 'in_cloud' | 'unclassified';
 

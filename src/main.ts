@@ -27,6 +27,8 @@ import { buildDraftPlan, finalisePlan, toCloudSteps, type DraftPlan, type FinalP
 import { buildCloudProfile, type CloudProfile } from './core/profile';
 import { getRulePack, PROGRAMS_BY_COUNTRY } from './core/rules';
 import type { Account, Category, CategorySource, CheckResult, CheckStatus, CountryCode, DataOrigin, LoanProgram, Transaction, UserInputs } from './core/types';
+import { CATEGORY_NAMES } from './core/types';
+import { LOGO } from './logo';
 import { accountToCsv, DEMO_PERSONAS } from './demo/generate';
 import { initFirebase } from './firebase';
 import { loadSettings } from './remote-config';
@@ -127,7 +129,6 @@ function announce(msg: string): void {
   window.setTimeout(() => (live.textContent = msg), 50);
 }
 
-const LOGO = `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="22" height="26" rx="2" fill="#fff" stroke="currentColor" stroke-width="2"/><path d="M9 10h14M9 15h14M9 20h9" stroke="currentColor" stroke-width="2"/><path d="M8 14h16v3H8z" fill="#ffe066" opacity=".9"/><path d="M9 15h14" stroke="currentColor" stroke-width="2"/></svg>`;
 
 const VERDICT: Record<CheckStatus, { word: string; svg: string }> = {
   ok: {
@@ -439,7 +440,7 @@ function renderWhoRead(): void {
 /** A select to correct a line a model read (or the user answered); rule lines stay plain text. */
 function typeCell(t: Transaction, editable: boolean): string {
   const current = t.category ?? 'other';
-  const plain = current.replace(/_/g, ' ');
+  const plain = CATEGORY_NAMES[current] ?? current.replace(/_/g, ' ');
   if (!editable || !isCorrectable(t)) return `<td class="by">${esc(plain)}</td>`;
   const choices = t.amount >= 0 ? CHOICES_IN : CHOICES_OUT;
   const options = [

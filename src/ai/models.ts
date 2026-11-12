@@ -313,11 +313,11 @@ export class HybridAI {
   async writeExplanation(
     answers: Answer[],
     flagged: Transaction[],
-    currency: string,
+    _currency: string,
     origin: DataOrigin,
   ): Promise<{ text: string; by: 'on_device' | 'in_cloud' | 'template' }> {
     const entry = origin === 'demo' ? this.ledger.record('demo_explanation', { answers: answers.length }) : undefined;
-    const result = await this.local.explain[origin].generateContent(explanationPrompt(answers, flagged, currency));
+    const result = await this.local.explain[origin].generateContent(explanationPrompt(answers));
     this.ledger.settle(entry, result.response.inferenceSource);
     const by = result.response.inferenceSource === 'in_cloud' ? 'in_cloud' : 'on_device';
     if (origin === 'user' && by === 'in_cloud') throw new Error('Refusing a cloud answer for user data.');
