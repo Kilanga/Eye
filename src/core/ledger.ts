@@ -5,7 +5,7 @@ import { PROGRAMS, type CheckId } from './types';
 /** One entry per request that left the device. Shown to the user in the "Outbound ledger" screen. */
 export interface LedgerEntry {
   at: string;
-  kind: 'plan' | 'letter_template' | 'interview' | 'demo_classification' | 'demo_question' | 'demo_explanation';
+  kind: 'plan' | 'letter_template' | 'interview' | 'demo_classification' | 'demo_question' | 'demo_explanation' | 'app_settings';
   /** Exactly what was sent, as JSON. */
   payload: string;
   bytes: number;

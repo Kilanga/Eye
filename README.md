@@ -67,6 +67,18 @@ flowchart LR
 
 Every model call is in [`src/ai/models.ts`](src/ai/models.ts).
 
+### Settings that change without a release: Firebase Remote Config
+
+Three values are read at start-up from Firebase Remote Config ([`src/remote-config.ts`](src/remote-config.ts)), validated one by one ([`src/core/settings.ts`](src/core/settings.ts)), and the models are rebuilt with them:
+
+| Parameter | Default | Use |
+|---|---|---|
+| `cloud_model` | `gemini-3.5-flash-lite` | The Gemini model for the cloud tasks. Must start with `gemini-`. |
+| `cloud_enabled` | `true` | Kill switch. When `false`, sample files are read on the device only, and the plan, questions and letter keep their local wording. If the free-tier quota runs out, the app keeps working. |
+| `clarify_max_questions` | `6` | How many "what is this line?" questions to ask (0 to 10). |
+
+The request carries no user data: a random install ID created by Firebase, the app ID, the browser language and the SDK version. It is listed in the outbound ledger. Offline or on error, the built-in defaults apply.
+
 ### The models write words, the code writes numbers
 
 - **Plan**: code decides the steps and computes the figures ("cut $141 a month or aim for housing at $1,709"). The cloud only receives the step names and must use `{{placeholders}}`; wording with a digit or a foreign placeholder is rejected ([`src/core/plan.ts`](src/core/plan.ts)).
@@ -88,7 +100,7 @@ Every model call is in [`src/ai/models.ts`](src/ai/models.ts).
 2. The cloud receives a `CloudProfile` ([`src/core/profile.ts`](src/core/profile.ts)): country, months covered, income and housing payment rounded to buckets, ratio in whole percent, event counts, light colours, plus enum step names.
 3. [`assertSafeForCloud()`](src/core/ledger.ts) blocks any payload with an unknown key, free text or a statement label. Tested in [`tests/privacy.test.ts`](tests/privacy.test.ts) and [`tests/plan.test.ts`](tests/plan.test.ts).
 4. The **outbound ledger** shows every request byte for byte, with `inferenceSource` from Firebase.
-5. No analytics, no third-party fonts or scripts, nothing stored. The optional follow-up summary (the same numbers as the cloud profile) is kept in the browser only if the user ticks the box.
+5. No analytics, no third-party fonts or scripts. The browser keeps only what Firebase needs (its install ID and the cached app settings) and, if the user ticks the boxes, the follow-up summary (the same numbers as the cloud profile) and the fingerprints of remembered answers.
 
 ## Learning from your answers, on the device
 
@@ -123,18 +135,18 @@ Honest caveat: the same author wrote the keyword rules and the labelled set; abo
 
 ## Bank exports
 
-CSV exports usually cover only the last few months, and lenders ask for the official monthly statements, which are PDFs. Both are read on the device. The CSV reader finds the header row even below a summary block, reads files with no header at all, separate debit and credit columns, unsigned amounts with a debit/credit column, and four-decimal amounts. Tested against the documented layouts of large US banks ([`tests/bank-formats.test.ts`](tests/bank-formats.test.ts), invented rows):
+CSV exports usually cover only the last few months, and lenders ask for the official monthly statements, which are PDFs. Both are read on the device. The CSV reader finds the header row even below a summary block, reads files with no header at all, separate debit and credit columns, unsigned amounts with a debit/credit column, and four-decimal amounts. Tested against the six most common layouts of US checking-account exports ([`tests/bank-formats.test.ts`](tests/bank-formats.test.ts), invented rows):
 
-| Layout | Seen at |
+| Layout | What the reader handles |
 |---|---|
-| Details, Posting Date, Description, Amount, Type, Balance | Chase checking |
-| Summary block, then Date, Description, Amount, Running Bal. | Bank of America |
-| No header: date, amount, `*`, empty, description | Wells Fargo |
-| Transaction Date, Transaction Amount (unsigned), Transaction Type, Transaction Description, Balance | Capital One 360 |
-| Status, Date, Description, Debit, Credit | Citi |
-| Date, Transaction, Name, Memo, Amount (four decimals) | U.S. Bank |
+| Details, Posting Date, Description, Amount, Type, Balance | Signed amounts, extra trailing columns |
+| Summary block, then Date, Description, Amount, Running Bal. | Header row found below a preamble |
+| No header: date, amount, `*`, empty, description | Columns guessed from the content |
+| Transaction Date, Transaction Amount, Transaction Type, Description, Balance | Unsigned amounts, sign taken from the type |
+| Status, Date, Description, Debit, Credit | Separate debit and credit columns |
+| Date, Transaction, Name, Memo, Amount | Four-decimal amounts, payee in its own column |
 
-Layouts as documented by [beancount.io](https://beancount.io/tools/csv-to-beancount/wells-fargo), [Tiller](https://tiller.com/export-us-bank-transactions/) and others; bank names are used only to describe file layouts and appear nowhere in the app.
+Layouts taken from the public documentation of import tools; every row in the tests is invented, and no bank is named in the app or the tests.
 
 ## Rule packs
 
@@ -171,8 +183,9 @@ Without Firebase configuration the app runs in **offline demo mode**: rules only
 
 1. Create a Firebase project and a Web app; enable **Firebase AI Logic** with the Gemini Developer API.
 2. Enable **App Check** with reCAPTCHA Enterprise; register a debug token for localhost.
-3. Copy `.env.example` to `.env.local` and fill it in.
-4. `npm run build && npx firebase-tools deploy --only hosting`.
+3. Optional: in **Remote Config**, add `cloud_model`, `cloud_enabled` and `clarify_max_questions` (see above) and publish. Without a template the defaults apply.
+4. Copy `.env.example` to `.env.local` and fill it in.
+5. `npm run build && npx firebase-tools deploy --only hosting`.
 
 ### Gemini Nano in Chrome
 

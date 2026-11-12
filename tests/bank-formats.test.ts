@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { importCsv } from '../src/core/import/csv';
 
 /**
- * Column layouts of the CSV exports of large US banks, as documented by import tools
+ * Common column layouts of US checking-account CSV exports, as documented by import tools
  * (sources in the README). Every row below is invented.
  */
 const opts = { accountId: 'a', currency: 'USD', country: 'US' as const };
 const read = (csv: string) => importCsv(csv, opts);
 
 describe('US bank CSV layouts', () => {
-  it('Chase checking: Details, Posting Date, Description, Amount, Type, Balance, Check or Slip #', () => {
+  it('Details, Posting Date, Description, Amount, Type, Balance, Check or Slip #', () => {
     const r = read(
       'Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #\n' +
         'DEBIT,10/14/2026,"CARD PURCHASE 10/13 GREENLEAF MARKET",-87.40,DEBIT_CARD,1234.56,,\n' +
@@ -19,7 +19,7 @@ describe('US bank CSV layouts', () => {
     expect(r.transactions[0].balance).toBeCloseTo(1234.56);
   });
 
-  it('Bank of America: summary block above the header, Running Bal. column', () => {
+  it('summary block above the header, Running Bal. column', () => {
     const r = read(
       'Description,,Summary Amt.\nBeginning balance as of 09/01/2026,,"3,200.00"\nTotal credits,,"4,900.00"\nTotal debits,,"-2,100.00"\nEnding balance as of 09/30/2026,,"6,000.00"\n\n' +
         'Date,Description,Amount,Running Bal.\n' +
@@ -31,7 +31,7 @@ describe('US bank CSV layouts', () => {
     expect(r.transactions[1]).toMatchObject({ date: '2026-09-05', amount: -1450, balance: 4200 });
   });
 
-  it('Wells Fargo: no header row (date, amount, *, empty, description)', () => {
+  it('no header row (date, amount, *, empty, description)', () => {
     const r = read(
       '"10/14/2026","-87.40","*","","PURCHASE AUTHORIZED ON 10/13 GREENLEAF MARKET CARD 1234"\n' +
         '"10/15/2026","2450.00","*","","BRIGHTWAVE LABS PAYROLL"\n' +
@@ -45,7 +45,7 @@ describe('US bank CSV layouts', () => {
     ]);
   });
 
-  it('Capital One 360: unsigned amounts with a Debit/Credit type column', () => {
+  it('unsigned amounts with a Debit/Credit type column', () => {
     const r = read(
       'Account Number,Transaction Date,Transaction Amount,Transaction Type,Transaction Description,Balance\n' +
         '1234,10/14/26,87.4,Debit,Debit Card Purchase - GREENLEAF MARKET,1147.16\n' +
@@ -57,12 +57,12 @@ describe('US bank CSV layouts', () => {
     ]);
   });
 
-  it('Citi: separate Debit and Credit columns, credit written negative', () => {
+  it('separate Debit and Credit columns, credit written negative', () => {
     const r = read('Status,Date,Description,Debit,Credit\nCleared,10/14/2026,GREENLEAF MARKET,87.40,\nCleared,10/15/2026,REFUND GREENLEAF MARKET,,-41.00\n');
     expect(r.transactions.map((t) => t.amount)).toEqual([-87.4, 41]);
   });
 
-  it('U.S. Bank: Name is the payee, four-decimal amounts, ISO dates, waived fees skipped', () => {
+  it('Name is the payee, four-decimal amounts, ISO dates, waived fees skipped', () => {
     const r = read(
       'Date,Transaction,Name,Memo,Amount\n' +
         '2026-10-14,DEBIT,GREENLEAF MARKET,Download from usbank.com. GREENLEAF MARKET,-87.4000\n' +
@@ -78,7 +78,7 @@ import { parseWithLayout, type PdfLine } from '../src/core/import/statement-text
 const line = (page: number, y: number, ...cells: [number, string][]): PdfLine => ({ page, y, items: cells.map(([x, text]) => ({ x, text })) });
 
 describe('US bank PDF layouts', () => {
-  it('single signed Amount column with Balance (Chase-style), header repeated per page', () => {
+  it('single signed Amount column with Balance, header repeated per page', () => {
     const lines = [
       line(1, 700, [40, 'Statement period: September 08, 2026 through October 06, 2026']),
       line(1, 600, [40, 'DATE'], [90, 'DESCRIPTION'], [420, 'AMOUNT'], [500, 'BALANCE']),
@@ -94,7 +94,7 @@ describe('US bank PDF layouts', () => {
     ]);
   });
 
-  it('Deposits/Credits and Withdrawals/Debits columns (Wells Fargo-style)', () => {
+  it('Deposits/Credits and Withdrawals/Debits columns', () => {
     const lines = [
       line(1, 700, [40, 'October 31, 2026']),
       line(1, 600, [40, 'Date'], [80, 'Check Number'], [150, 'Description'], [380, 'Deposits/Credits'], [460, 'Withdrawals/Debits'], [540, 'Ending daily balance']),

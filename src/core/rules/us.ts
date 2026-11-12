@@ -82,7 +82,7 @@ export const US_VA: RulePack = {
   },
   sources: [
     ...US.sources,
-    { topic: 'VA 41% DTI benchmark and residual income', url: 'https://www.chase.com/personal/mortgage/education/financing-a-home/debt-to-income-ratio-for-va-loan', checkedOn: '2026-11-12' },
+    { topic: 'VA 41% DTI benchmark and residual income', url: 'https://www.ecfr.gov/current/title-38/chapter-I/part-36/subpart-B/section-36.4340', checkedOn: '2026-11-12' },
     { topic: 'VA residual income +20% above 41%', url: 'https://www.veteransunited.com/futurehomeowners/va-loan-debt-to-income-guidelines', checkedOn: '2026-11-12' },
   ],
 };

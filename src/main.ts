@@ -27,6 +27,8 @@ import { getRulePack, PROGRAMS_BY_COUNTRY } from './core/rules';
 import type { Account, Category, CategorySource, CheckResult, CheckStatus, CountryCode, DataOrigin, LoanProgram, Transaction, UserInputs } from './core/types';
 import { accountToCsv, DEMO_PERSONAS } from './demo/generate';
 import { initFirebase } from './firebase';
+import { loadSettings } from './remote-config';
+import { DEFAULT_SETTINGS, type AppSettings } from './core/settings';
 import { runPipeline, type PipelineResult } from './pipeline';
 
 /*
@@ -42,6 +44,16 @@ import { runPipeline, type PipelineResult } from './pipeline';
 const ledger = new OutboundLedger();
 const app = initFirebase();
 const ai = app ? new HybridAI(app, ledger) : null;
+/** App settings from Firebase Remote Config (cloud model, cloud on/off, number of questions). */
+let settings: AppSettings = DEFAULT_SETTINGS;
+if (app && ai) {
+  void loadSettings(app, ledger).then((loaded) => {
+    settings = loaded.settings;
+    ai.configure(settings);
+    renderStatus();
+    if (state.result) renderClarify();
+  });
+}
 
 interface State {
   country: CountryCode;
@@ -358,10 +370,10 @@ function renderStatus(): void {
   d.textContent = device[state.device];
   d.className = state.device === 'available' ? 'on' : '';
   const c = $('#st-cloud');
-  c.textContent = !ai ? 'Cloud off (demo mode)' : navigator.onLine ? 'Cloud connected' : 'Offline';
-  c.className = ai && navigator.onLine ? 'on' : '';
-  const bytes = ledger.list().reduce((s, e) => s + e.bytes, 0);
-  $('#st-bytes').textContent = bytes ? `${bytes.toLocaleString('en-US')} bytes sent from this device` : 'Nothing sent from this device';
+  c.textContent = !ai ? 'Cloud off (demo mode)' : !ai.cloudEnabled ? 'Cloud paused in the app settings' : navigator.onLine ? 'Cloud connected' : 'Offline';
+  c.className = ai && ai.cloudEnabled && navigator.onLine ? 'on' : '';
+  const bytes = ledger.list().filter((e) => e.kind !== 'app_settings').reduce((s, e) => s + e.bytes, 0);
+  $('#st-bytes').textContent = bytes ? `${bytes.toLocaleString('en-US')} bytes about your file sent from this device` : 'Nothing about your file sent from this device';
   const prep = $<HTMLButtonElement>('#prepare');
   prep.disabled = !ai || state.device === 'available' || state.device === 'no-api' || state.device === 'unavailable';
   prep.textContent = state.device === 'available' ? 'On-device model ready' : 'Download the on-device model';
@@ -441,7 +453,7 @@ function flaggedMap(): Map<string, CheckStatus> {
 
 function renderClarify(): void {
   const r = state.result!;
-  const qs = pickQuestions(allTxs(), r.metrics.incomeBase).filter((q) => state.answered[q.key] !== 'skip');
+  const qs = pickQuestions(allTxs(), r.metrics.incomeBase, settings.maxQuestions).filter((q) => state.answered[q.key] !== 'skip');
   const unsure = allTxs().filter((t) => t.categorySource === 'unclassified' || t.categoryConfidence === 'low').length;
   const remembered = Object.keys(state.personalRules).length;
   if (!qs.length && !remembered) {
@@ -608,7 +620,7 @@ function renderPlan(): void {
     <tr class="milestone"><td>Weeks ${p.cleanFromWeek} to 12</td><td>Keep every statement clean: these are the months the lender will read.</td><td>Review again around day 30 and day 60.</td></tr>
     <tr class="milestone"><td>Week 13</td><td>Review one last time, then apply.</td><td></td></tr></tbody></table>`;
   $<HTMLButtonElement>('#polish').disabled = !ai || !p.steps.length;
-  $('#polish-note').textContent = ai ? 'Sends the summary and the step names, never the figures.' : 'Needs the cloud connection.';
+  $('#polish-note').textContent = !ai ? 'Needs the cloud connection.' : !ai.cloudEnabled ? 'Cloud wording is paused for now; the plan keeps its own wording.' : 'Sends the summary and the step names, never the figures.';
 }
 
 function renderQuestions(): void {
@@ -749,7 +761,7 @@ function renderLedger(): void {
         .map(
           (e) =>
             `<tr><td>${e.at.slice(11, 19)}</td><td>${esc(e.kind.replace(/_/g, ' '))}</td><td>${e.bytes}</td><td>${esc(
-              e.inferenceSource === 'in_cloud' ? 'Cloud' : e.inferenceSource === 'on_device' ? 'This device' : e.kind.startsWith('demo') ? 'Sample file' : 'Waiting',
+              e.kind === 'app_settings' ? 'Firebase Remote Config' : e.inferenceSource === 'in_cloud' ? 'Cloud' : e.inferenceSource === 'on_device' ? 'This device' : e.kind.startsWith('demo') ? 'Sample file' : 'Waiting',
             )}</td><td><code>${esc(e.payload)}</code></td></tr>`,
         )
         .join('')
