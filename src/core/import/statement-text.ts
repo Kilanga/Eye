@@ -40,10 +40,10 @@ type Column = 'date' | 'label' | 'debit' | 'credit' | 'amount' | 'balance';
 const HEADER_WORDS: Record<Column, RegExp> = {
   date: /^(date|posting date|trans(action)? date|date operation|date d.operation)$/i,
   label: /^(description|details|transaction|libelle|libelle de l.operation|nature de l.operation|operation)$/i,
-  debit: /^(debit|debits|withdrawals?|money out|paid out|payments)$/i,
-  credit: /^(credit|credits|deposits?|money in|paid in)$/i,
+  debit: /^(debit|debits|withdrawals?|withdrawals?\/debits?|withdrawals? and other (debits|subtractions)|money out|paid out|payments)$/i,
+  credit: /^(credit|credits|deposits?|deposits?\/credits?|deposits? and other (credits|additions)|money in|paid in)$/i,
   amount: /^(amount|montant)$/i,
-  balance: /^(balance|solde)$/i,
+  balance: /^(balance|solde|ending daily balance|daily balance|running balance)$/i,
 };
 
 const centre = (i: PdfItem) => i.x + (i.width ?? 0) / 2;
