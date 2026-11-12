@@ -74,6 +74,14 @@ Every model call is in [`src/ai/models.ts`](src/ai/models.ts).
 - **Questions**: Nano produces a JSON query constrained by a schema; code runs it ([`src/core/ask.ts`](src/core/ask.ts)).
 - **Explanation**: a paragraph that brings a number found neither in the answers nor in the flagged lines is replaced by the user's own words ([`checkExplanation`](src/core/interview.ts)).
 
+## Accessibility and design
+
+- Checked with axe-core (WCAG 2.2 AA rules): no violation, before and after a review.
+- Every result is given in words and with a shape, never with colour alone; the most serious come first.
+- Landmarks, a skip link, one heading per step; focus moves to the results when the review ends; progress, results and errors are announced to screen readers.
+- Targets at least 44 px high; reflows to one column on a 320 px screen; respects reduced motion and Windows high-contrast mode.
+- Typeface: Atkinson Hyperlegible Next and Mono, designed by the Braille Institute for low-vision readers (SIL Open Font License), bundled with the app so no request goes to a font server.
+
 ## Privacy guarantees
 
 1. Labels, dates, exact amounts, account names, answers and questions never leave the device for real statements.
