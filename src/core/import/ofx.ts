@@ -1,5 +1,5 @@
 import type { CountryCode, Transaction } from '../types';
-import { parseAmount, parseDate } from './parse-utils';
+import { cleanLabel, parseAmount, parseDate } from './parse-utils';
 
 /**
  * Minimal OFX/QFX reader (SGML 1.x and XML 2.x). Reads STMTTRN blocks only:
@@ -16,7 +16,7 @@ export function importOfx(
     const body = block.split(/<\/STMTTRN>/i)[0];
     const date = parseDate(tag(body, 'DTPOSTED') ?? '', opts.country);
     const amount = parseAmount(tag(body, 'TRNAMT') ?? '');
-    const label = [tag(body, 'NAME'), tag(body, 'MEMO')].filter(Boolean).join(' - ').trim();
+    const label = cleanLabel([tag(body, 'NAME'), tag(body, 'MEMO')].filter(Boolean).join(' - '));
     if (!date || amount === null || !label) return;
     transactions.push({
       id: `${opts.accountId}-${tag(body, 'FITID') ?? i}`,

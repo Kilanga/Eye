@@ -1,5 +1,5 @@
 import type { CountryCode, Transaction } from '../types';
-import { parseAmount } from './parse-utils';
+import { cleanLabel, parseAmount } from './parse-utils';
 
 /**
  * Bank statements as PDF: the text is extracted on the device (pdf.ts) into positioned lines,
@@ -126,7 +126,7 @@ export function parseWithLayout(lines: PdfLine[], opts: StatementOptions, fallba
       // A wrapped description continues the previous transaction.
       const words = line.items.filter((i) => !isAmount(i.text)).map((i) => i.text.trim());
       if (last && words.length && words.length === line.items.length && line.page === lastPage) {
-        last.rawLabel = `${last.rawLabel} ${words.join(' ')}`.slice(0, 160);
+        last.rawLabel = cleanLabel(`${last.rawLabel} ${words.join(' ')}`);
       }
       continue;
     }
@@ -135,7 +135,7 @@ export function parseWithLayout(lines: PdfLine[], opts: StatementOptions, fallba
     const label: string[] = [];
     for (const item of rest) {
       if (!isAmount(item.text)) {
-        label.push(item.text.trim());
+        label.push(cleanLabel(item.text));
         continue;
       }
       const v = parseAmount(item.text.replace(/\bcr\b/i, '').replace(/\bdr\b/i, ''));
@@ -218,7 +218,7 @@ export function validateModelItems(items: ModelItem[], chunk: string, opts: Stat
       amount: Math.round(it.amount * 100) / 100,
       currency: opts.currency,
       country: opts.country,
-      rawLabel: it.label.trim().slice(0, 160),
+      rawLabel: cleanLabel(it.label),
     });
   }
   return out;
