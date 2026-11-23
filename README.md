@@ -18,7 +18,7 @@ Built for the [#BuildHybridAI](https://firebasehybridaihackathon.devpost.com/) h
 4. In **Explain it to the lender**, click **Show the questions**, answer one, then **Write my explanation**.
 5. Ask a question in **Ask your statements**.
 6. Click **Maya - 60 days later** and review again: the lights turn green. Then **Diego - Denver, self-employed** (a bank statement loan computed from 12 months of deposits) and **Camille - Lyon** (French rules).
-7. Open **What left this device**: the outbound ledger shows every model request and the data it carried.
+7. Open **What left this device**: the outbound ledger shows every request that can reach the cloud and the data it carried.
 
 Synthetic samples may use the cloud when Gemini Nano is missing, so the whole flow works on any computer. Real statements never do (see below). To test the import path, download Maya's sample files (CSV, PDF, PDF with an unusual layout) from the same screen.
 
@@ -100,7 +100,7 @@ The request carries no user data: a random install ID created by Firebase, the a
 1. Labels, dates, exact amounts, account names, answers and questions never leave the device for real statements.
 2. The cloud receives a `CloudProfile` ([`src/core/profile.ts`](src/core/profile.ts)): country, months covered, income and housing payment rounded to buckets, ratio in whole percent, event counts, light colours, plus enum step names.
 3. [`assertSafeForCloud()`](src/core/ledger.ts) blocks any payload with an unknown key, free text or a statement label. Tested in [`tests/privacy.test.ts`](tests/privacy.test.ts) and [`tests/plan.test.ts`](tests/plan.test.ts).
-4. The **outbound ledger** lists every model request the app makes about your statements, with the data it carries (the summary profile; for sample files, what was sent), its size and `inferenceSource` from Firebase. It does not list the technical requests to Google (reCAPTCHA Enterprise, App Check, Firebase Installations, Remote Config), which carry no statement data.
+4. The **outbound ledger** lists every model request that can reach the cloud, with the data it carries (the summary profile; for sample files, what was sent), its size and `inferenceSource` from Firebase, and the Remote Config fetch. Reading your own statements on Gemini Nano is not listed, since nothing leaves the device, and neither are the other technical requests to Google (reCAPTCHA Enterprise, App Check, Firebase Installations), which carry no statement data.
 5. No analytics and no third-party fonts. The one third-party script is Google reCAPTCHA Enterprise, which Firebase App Check needs to protect the AI endpoint: it loads from google.com when the page opens and sends browser signals to Google, never statement data. The browser keeps what Firebase and reCAPTCHA need (a random install ID, the cached app settings, an App Check token, SDK usage dates) and, if the user ticks the boxes, the follow-up summary and the fingerprints of remembered answers. "Erase everything from this browser" removes all of it; opening the page again brings back the Firebase and reCAPTCHA entries, never the summary or the remembered answers.
 
 ## Learning from your answers, on the device
