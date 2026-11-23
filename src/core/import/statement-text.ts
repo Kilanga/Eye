@@ -134,7 +134,7 @@ export function parseWithLayout(lines: PdfLine[], opts: StatementOptions, fallba
     const label: string[] = [];
     for (const item of rest) {
       if (!isAmount(item.text)) {
-        label.push(item.text.trim());
+        label.push(cleanLabel(item.text));
         continue;
       }
       const v = parseAmount(item.text.replace(/\bcr\b/i, '').replace(/\bdr\b/i, ''));
@@ -155,7 +155,7 @@ export function parseWithLayout(lines: PdfLine[], opts: StatementOptions, fallba
       amount,
       currency: opts.currency,
       country: opts.country,
-      rawLabel: cleanLabel(label.join(' ')),
+      rawLabel: label.join(' '),
     };
     lastPage = line.page;
     out.push(last);
