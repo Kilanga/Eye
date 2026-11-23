@@ -87,7 +87,7 @@ export async function accountToPdf(account: Account, holder: string, layout: 'cl
     page.drawText(dmy(t.date, false), { x: cols.date, y, size: 9, font });
     page.drawText(t.rawLabel, { x: cols.label, y, size: 9, font });
     right(money(t.amount), t.amount < 0 ? cols.out : cols.in);
-    if (cols.bal) right(money(balance), cols.bal);
+    if (cols.bal) right(`${balance < 0 ? '-' : ''}${money(balance)}`, cols.bal);
     y -= 14;
   }
   return doc.save();

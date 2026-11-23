@@ -28,7 +28,7 @@ Synthetic samples may use the cloud when Gemini Nano is missing, so the whole fl
 |---|---|
 | Import CSV, OFX and **PDF** statements, several accounts, transfers between them matched | Device (code + Gemini Nano for unusual PDF layouts) |
 | Classify every line | Device: keyword rules first, Gemini Nano for the rest |
-| Lender checks per country and **loan program** (US conventional, FHA, VA, bank statement loan for the self-employed; France): debt ratio, overdrafts, large deposits, gambling, short-term credit, savings, **hidden debts** and regular payments to a person, cash deposits, recent and complete statements, funds to close and reserves | Device (code, unit-tested) |
+| Lender checks per country and **loan program** (US conventional, FHA, VA, bank statement loan for the self-employed; France): debt ratio, overdrafts, large deposits, gambling, short-term credit, savings, **hidden debts** and regular payments to a person, cash deposits, recent and complete statements (running balance checked line by line: a jump means a missing line or page), funds to close and reserves | Device (code, unit-tested) |
 | Self-employed income from 12 months of deposits: transfers, refunds, loan proceeds and peer-to-peer excluded, expense ratio applied | Device (code + Gemini Nano to tell revenue from the rest) |
 | Documents to gather for each light, and a gift letter filled in locally | Device |
 | What-if simulator on the debt ratio | Device (code) |
@@ -160,6 +160,8 @@ The other on-device tasks, checked on the same machine:
 
 PDF import: the sample statements are generated, rendered to PDF and read back in the tests ([`tests/pdf.test.ts`](tests/pdf.test.ts)): every line, date and total matches.
 
+Running balance: when a statement prints a balance (CSV column or PDF column), code checks that each day's closing balance equals the previous one plus that day's lines ([`src/core/balances.ts`](src/core/balances.ts), [`tests/balances.test.ts`](tests/balances.test.ts)). A jump means a missing line, a missing page or a misread amount, and it is shown under "Recent and complete statements" with the lines to look at. A balance column that is not a running balance (most days break) is not checked rather than flagged.
+
 Honest caveat: the same author wrote the keyword rules, both labelled sets and the prompt. The held-out set limits, but does not remove, that bias.
 
 ## Bank exports
@@ -202,7 +204,7 @@ Requirements: Node 24.12 or later (required by the Firebase SDK), Chrome desktop
 
 ```bash
 npm install
-npm test          # 86 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions, model checks
+npm test          # 102 tests: rules, imports (CSV, OFX, PDF), transfers, hidden debts, plan, privacy, interview, questions, model checks
 npm run dev       # http://localhost:5173 (and /eval.html)
 ```
 
