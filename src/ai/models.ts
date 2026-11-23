@@ -24,7 +24,8 @@ import { finalisePlan, toCloudSteps, type DraftPlan, type FinalPlan, type PlanWo
 import { assertSafeForCloud, type LedgerEntry, type OutboundLedger } from '../core/ledger';
 import { CATEGORIES, type Category, type DataOrigin, type Transaction } from '../core/types';
 import { interviewPrompt, classificationPrompt, letterPrompt, planPrompt } from './prompts';
-import { classificationJsonSchema, interviewSchema, letterSchema, planSchema, statementJsonSchema } from './schemas';
+import { classificationJsonSchema, interviewSchema, letterSchema, statementJsonSchema } from './schemas';
+import { parseModelJson } from '../core/model-json';
 import { queryJsonSchema, queryPrompt, sanitiseQuery, type StatementQuery } from '../core/ask';
 import {
   checkExplanation,
@@ -101,12 +102,12 @@ export class HybridAI {
           },
         })
       : this.classifierLocal;
+    // Plain text on purpose: with JSON mode (with or without a schema) Gemini 3.5 Flash-Lite answered
+    // this prompt with HTTP 500 "high demand" on every try (Nov 23, 2026), while the same request in
+    // plain text answered every time. The prompt describes the JSON; code parses and validates it.
     this.planner = getGenerativeModel(this.ai, {
       mode: InferenceMode.ONLY_IN_CLOUD,
-      inCloudParams: {
-        model: cloudModel,
-        generationConfig: { responseMimeType: 'application/json', responseSchema: planSchema },
-      },
+      inCloudParams: { model: cloudModel },
     });
     this.writer = getGenerativeModel(this.ai, {
       mode: InferenceMode.ONLY_IN_CLOUD,
@@ -242,12 +243,7 @@ export class HybridAI {
     assertSafeForCloud(payload, rawLabels);
     const entry = this.ledger.record('plan', payload);
     const result = await this.cloudCall(entry, () => this.planner.generateContent(planPrompt(profile, steps)));
-    let wording: PlanWording | undefined;
-    try {
-      wording = JSON.parse(result.response.text()) as PlanWording;
-    } catch {
-      wording = undefined;
-    }
+    const wording = parseModelJson<PlanWording>(result.response.text()) ?? undefined;
     return finalisePlan(draft, wording);
   }
 
