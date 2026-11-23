@@ -766,7 +766,8 @@ function renderPrivacy(): void {
         .map((x) => `<li>${esc(x)}</li>`)
         .join('')
     : '<li>Nothing added yet.</li>';
-  const n = state.profile ? Object.keys(state.profile).length - 2 : 0;
+  // Numbers only: country, program and the list of check results are not numbers.
+  const n = state.profile ? Object.values(state.profile).filter((v) => typeof v === 'number').length : 0;
   $('#leaves').innerHTML = state.profile
     ? [
         `${n} rounded numbers: income and payment in ranges, the ratio in whole percent, counts of events`,

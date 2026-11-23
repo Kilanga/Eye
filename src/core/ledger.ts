@@ -30,6 +30,8 @@ const CHECK_IDS: readonly CheckId[] = [
 const ALLOWED_STRINGS = new Set<string>(['US', 'FR', 'ok', 'watch', 'alert', ...CHECK_IDS, ...LEVER_IDS, ...PROGRAMS]);
 const ROOT_EXTRA_KEYS = ['flags', 'steps'];
 const NESTED_KEYS = ['id', 'status', 'week', 'checkId', 'lever'];
+/** Amounts in the profile are sent only as the lower bound of a bucket (src/core/profile.ts). */
+const BUCKET_WIDTH: Record<string, number> = { 'root.incomeBucket': 500, 'root.housingPaymentBucket': 250 };
 
 /**
  * Throws if a payload for real user data contains anything but whitelisted keys,
@@ -46,7 +48,12 @@ export function assertSafeForCloud(payload: unknown, rawLabels: Iterable<string>
 
   function visit(value: unknown, path: string): void {
     if (typeof value === 'number') {
-      if (!Number.isFinite(value) && value !== -1) throw new PrivacyViolation(`Non-finite number at ${path}`);
+      // Only whole numbers leave the device (counts, months, ratio in whole percent, -1 for
+      // "not computable"), and the two amounts only as the lower bound of their bucket: an exact
+      // amount such as 1849.99 is refused even if a future field forgets to round it.
+      if (!Number.isInteger(value)) throw new PrivacyViolation(`Not a rounded number at ${path}`);
+      const width = BUCKET_WIDTH[path];
+      if (width && value % width !== 0) throw new PrivacyViolation(`Amount not bucketed at ${path}`);
       return;
     }
     if (typeof value === 'string') {

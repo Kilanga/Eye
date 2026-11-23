@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assertSafeForCloud, OutboundLedger, PrivacyViolation } from '../src/core/ledger';
 import { getRulePack } from '../src/core/rules';
 import { buildCloudProfile } from '../src/core/profile';
-import { usAlmostReady } from '../src/demo/generate';
+import { DEMO_PERSONAS, usAlmostReady } from '../src/demo/generate';
 import { runPipeline } from '../src/pipeline';
 
 async function profileAndLabels() {
@@ -30,6 +30,34 @@ describe('assertSafeForCloud', () => {
     expect(() => assertSafeForCloud({ ...profile, checks: [{ id: 'gambling', status: 'ok', label: 'x' }] }, [])).toThrow(
       PrivacyViolation,
     );
+  });
+});
+
+describe('assertSafeForCloud: rounded numbers only', () => {
+  it('refuses an exact amount, a decimal or a number that is not a whole bucket', async () => {
+    const { profile, labels } = await profileAndLabels();
+    expect(() => assertSafeForCloud({ ...profile, incomeBucket: 6412 }, labels)).toThrow(PrivacyViolation);
+    expect(() => assertSafeForCloud({ ...profile, housingPaymentBucket: 1849.99 }, labels)).toThrow(PrivacyViolation);
+    expect(() => assertSafeForCloud({ ...profile, housingPaymentBucket: 1850 }, labels)).toThrow(PrivacyViolation);
+    expect(() => assertSafeForCloud({ ...profile, debtRatioPct: 41.7 }, labels)).toThrow(PrivacyViolation);
+    expect(() => assertSafeForCloud({ ...profile, monthsCovered: Number.NaN }, labels)).toThrow(PrivacyViolation);
+    expect(() => assertSafeForCloud({ ...profile, debtRatioPct: Infinity }, labels)).toThrow(PrivacyViolation);
+  });
+
+  it('accepts the profile of every sample file, with any housing payment', async () => {
+    for (const persona of DEMO_PERSONAS) {
+      const p = persona();
+      const pack = getRulePack(p.country, p.program);
+      for (const housing of [0, 1849.99, p.projectedHousingPayment]) {
+        const a = await runPipeline(p.accounts, pack, { grossMonthlyIncome: p.grossMonthlyIncome, projectedHousingPayment: housing }, null);
+        expect(() => assertSafeForCloud(buildCloudProfile(a, housing), [])).not.toThrow();
+      }
+    }
+  });
+
+  it('still accepts "not computable" (-1) and whole buckets', async () => {
+    const { profile, labels } = await profileAndLabels();
+    expect(() => assertSafeForCloud({ ...profile, debtRatioPct: -1, incomeBucket: 6000, housingPaymentBucket: 1750 }, labels)).not.toThrow();
   });
 });
 
