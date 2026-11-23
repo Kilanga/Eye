@@ -291,7 +291,7 @@ document.querySelector('#app')!.innerHTML = `
       <h3>The underwriter's questions</h3>
       <div class="actions" style="margin-top:0"><button type="button" class="btn" id="get-questions">Show the questions</button><span class="note" id="questions-note"></span></div>
       <div id="questions"></div>
-      <div class="actions hidden" id="explain-actions"><button type="button" class="btn" id="write-explanation">Write my explanation</button><span class="note" id="explanation-note">Your answers stay on this device.</span></div>
+      <div class="actions hidden" id="explain-actions"><button type="button" class="btn" id="write-explanation">Write my explanation</button><span class="note" id="explanation-note">With your own statements, your answers stay on this device. With a sample file and no Gemini Nano, they go to Gemini in the cloud.</span></div>
       <div id="explanation"></div>
       <div id="letter-block" class="hidden">
         <h3>Your letter of explanation</h3>
@@ -311,7 +311,7 @@ document.querySelector('#app')!.innerHTML = `
 
     <section class="sheet hidden" id="ask" aria-labelledby="h-ask">
       <h2 id="h-ask" tabindex="-1"><span class="n">6</span>Ask your statements</h2>
-      <p class="lead">Gemini Nano turns your question into a search on this device. The totals are counted by the app, not guessed.</p>
+      <p class="lead">Gemini Nano turns your question into a search on this device (with a sample file and no Gemini Nano, the cloud model reads the question). The totals are counted by the app, not guessed.</p>
       <form class="ask-row" id="ask-form">
         <div class="field"><label for="question">Your question</label><input type="text" id="question" autocomplete="off" /></div>
         <button type="submit" class="btn">Ask</button>
@@ -333,7 +333,7 @@ document.querySelector('#app')!.innerHTML = `
         <div><h3>Stays on this device</h3><ul id="stays"><li>Nothing added yet.</li></ul></div>
         <div><h3>Can be sent to Gemini in the cloud</h3><ul id="leaves"><li>Nothing yet.</li></ul></div>
       </div>
-      <p class="note">The cloud model is Google's Gemini API, reached through Firebase AI Logic, under the <a href="https://ai.google.dev/terms">Gemini API terms</a> and <a href="https://policies.google.com/privacy">Google's privacy policy</a>. On its free tier Google may use what it receives to improve its products, and asks developers not to send personal information: that is why only rounded numbers and check names ever leave this device, and only when you press a cloud button.</p>
+      <p class="note">The cloud model is Google's Gemini API, reached through Firebase AI Logic, under the <a href="https://ai.google.dev/terms">Gemini API terms</a> and <a href="https://policies.google.com/privacy">Google's privacy policy</a>. On its free tier Google may use what it receives to improve its products, and asks developers not to send personal information: that is why, for your own statements, only whole numbers and check names ever leave this device, and only when you press a cloud button. Opening the page also contacts Google for reCAPTCHA, App Check and Firebase settings, with no statement data.</p>
       <details><summary>The exact summary, as it would be sent</summary><pre id="payload" tabindex="0">{}</pre></details>
       <h3>Every request sent</h3>
       <p class="note">Byte for byte, with where Firebase says the answer came from.</p>
@@ -502,7 +502,7 @@ function renderClarify(): void {
       })
       .join('')}
     <div class="check-row"><input type="checkbox" id="remember" ${remembered ? 'checked' : ''} aria-describedby="remember-hint" /><label for="remember">Remember my answers on this browser</label></div>
-    <p class="note" id="remember-hint">Stored as a fingerprint that cannot be read back, never the merchant name. ${remembered ? `${remembered === 1 ? 'One answer' : `${remembered} answers`} remembered.` : ''} The lender still sees the real lines.</p>
+    <p class="note" id="remember-hint">Stored as a one-way fingerprint, never the merchant name: someone using this browser could still check whether a given name is among your answers. ${remembered ? `${remembered === 1 ? 'One answer' : `${remembered} answers`} remembered.` : ''} The lender still sees the real lines.</p>
     ${remembered ? '<button type="button" class="btn link" id="forget-answers">Forget my remembered answers</button>' : ''}
   </div>`;
 }

@@ -4,7 +4,7 @@
 
 Before a mortgage or a rental, a lender reads your last months of bank statements line by line: overdraft fees, a deposit nobody can explain, a casino charge, a furniture payment plan that is really a loan, a debt ratio a few points too high. Most applicants find out when the file is turned down.
 
-Underwriter's Eye runs that review first, in the browser. Gemini Nano reads the statements **on the device**, the lender's rules for your country turn them into a traffic-light report, and you get a 90-day plan, an explanation letter and answers to your own questions. The cloud model only ever sees about ten rounded numbers.
+Underwriter's Eye runs that review first, in the browser. Gemini Nano reads the statements **on the device**, the lender's rules for your country turn them into a traffic-light report, and you get a 90-day plan, an explanation letter and answers to your own questions. For your own statements, the cloud model only ever sees a summary: ten whole numbers (income and housing payment as ranges), the result of each check and the names of the plan steps. With a sample file and no Gemini Nano, the cloud stands in for the on-device model and also reads the invented lines and what you type about the sample.
 
 Built for the [#BuildHybridAI](https://firebasehybridaihackathon.devpost.com/) hackathon with Firebase AI Logic hybrid inference. All code was written during the contest period.
 
@@ -18,7 +18,7 @@ Built for the [#BuildHybridAI](https://firebasehybridaihackathon.devpost.com/) h
 4. In **Explain it to the lender**, click **Show the questions**, answer one, then **Write my explanation**.
 5. Ask a question in **Ask your statements**.
 6. Click **Maya - 60 days later** and review again: the lights turn green. Then **Diego - Denver, self-employed** (a bank statement loan computed from 12 months of deposits) and **Camille - Lyon** (French rules).
-7. Open **What left this device**: the outbound ledger shows every byte sent.
+7. Open **What left this device**: the outbound ledger shows every model request and the data it carried.
 
 Synthetic samples may use the cloud when Gemini Nano is missing, so the whole flow works on any computer. Real statements never do (see below). To test the import path, download Maya's sample files (CSV, PDF, PDF with an unusual layout) from the same screen.
 
@@ -85,7 +85,7 @@ The request carries no user data: a random install ID created by Firebase, the a
 - **PDF reading**: each line returned by Nano is kept only if its amount and its words are on the page ([`validateModelItems`](src/core/import/statement-text.ts)).
 - **Questions**: Nano produces a JSON query constrained by a schema; code runs it ([`src/core/ask.ts`](src/core/ask.ts)).
 - **Explanation**: a paragraph that brings a number found neither in the answers nor in the flagged lines, or that is written from the lender's side ("your mother"), is replaced by the user's own words ([`checkExplanation`](src/core/interview.ts)).
-- **A model's guess never clears a lender check.** Only the built-in rules or the user's own answer can. On real hardware Gemini Nano read Maya's $6,000 mobile deposit as salary and her furniture instalment plan as housing, which made both flags disappear. Now a large deposit read by a model stays a deposit to explain and becomes the first question to the user, and a fixed monthly payment a model calls "housing" or "shopping" is still offered as a possible debt ([`isModelGuess`](src/core/clarify.ts), [`tests/model-guess.test.ts`](tests/model-guess.test.ts)).
+- **A model's guess never clears a flagged deposit or a possible debt on its own.** Only the built-in rules or the user's own answer can. On real hardware Gemini Nano read Maya's $6,000 mobile deposit as salary and her furniture instalment plan as housing, which made both flags disappear. Now a large deposit read by a model stays a deposit to explain and becomes the first question to the user, and a fixed monthly payment a model calls "housing" or "shopping" is still offered as a possible debt ([`isModelGuess`](src/core/clarify.ts), [`tests/model-guess.test.ts`](tests/model-guess.test.ts)).
 
 ## Accessibility and design
 
@@ -100,15 +100,15 @@ The request carries no user data: a random install ID created by Firebase, the a
 1. Labels, dates, exact amounts, account names, answers and questions never leave the device for real statements.
 2. The cloud receives a `CloudProfile` ([`src/core/profile.ts`](src/core/profile.ts)): country, months covered, income and housing payment rounded to buckets, ratio in whole percent, event counts, light colours, plus enum step names.
 3. [`assertSafeForCloud()`](src/core/ledger.ts) blocks any payload with an unknown key, free text or a statement label. Tested in [`tests/privacy.test.ts`](tests/privacy.test.ts) and [`tests/plan.test.ts`](tests/plan.test.ts).
-4. The **outbound ledger** shows every request byte for byte, with `inferenceSource` from Firebase.
-5. No analytics, no third-party fonts or scripts. The browser keeps only what Firebase needs (its install ID and the cached app settings) and, if the user ticks the boxes, the follow-up summary (the same numbers as the cloud profile) and the fingerprints of remembered answers.
+4. The **outbound ledger** lists every model request the app makes about your statements, with the data it carries (the summary profile; for sample files, what was sent), its size and `inferenceSource` from Firebase. It does not list the technical requests to Google (reCAPTCHA Enterprise, App Check, Firebase Installations, Remote Config), which carry no statement data.
+5. No analytics and no third-party fonts. The one third-party script is Google reCAPTCHA Enterprise, which Firebase App Check needs to protect the AI endpoint: it loads from google.com when the page opens and sends browser signals to Google, never statement data. The browser keeps what Firebase and reCAPTCHA need (a random install ID, the cached app settings, an App Check token, SDK usage dates) and, if the user ticks the boxes, the follow-up summary and the fingerprints of remembered answers. "Erase everything from this browser" removes all of it.
 
 ## Learning from your answers, on the device
 
 When the rules do not recognise a line, or Gemini Nano classifies it with low confidence (the on-device output schema carries a `confidence` field), the app asks about it, in plain words and only when the answer can change a result: large deposits, money in, and regular payments that could be a debt. Up to six questions, one per merchant ([`src/core/clarify.ts`](src/core/clarify.ts)).
 
 - **The answer applies at once** to every line with the same name, the review is recomputed and the change in ratio and checks is announced to screen readers.
-- **Learning, level 1: personal rules.** If the user ticks "Remember my answers on this browser", the merchant is stored as a SHA-256 fingerprint of its normalised name and direction, never as text. Next review, those lines are read before the model is called (source: "Your answers").
+- **Learning, level 1: personal rules.** If the user ticks "Remember my answers on this browser", the merchant is stored as a SHA-256 fingerprint of its normalised name and direction, not as text: it cannot be turned back into the name, though a known name can be checked against it. Next review, those lines are read before the model is called (source: "Your answers").
 - **Learning, level 2: the on-device prompt.** The answers of the session become few-shot examples in the Gemini Nano prompt, so a similar line (another contractor, another client) is read better. They stay in memory and only ever go to the on-device model; user answers are never mixed with demo data.
 - **The user has the last word on what a model guessed.** In "Every line, and who read it", any line Gemini Nano read (or the user answered) has a "What is this?" choice; the change applies to every line of the same name and the review is recomputed.
 - **Answers cannot hide a risk.** Lines read by the built-in rules (betting, payday loan, overdraft fee...) cannot be relabelled, and a large deposit stays flagged whatever it is called. The lender still sees the real statement.
