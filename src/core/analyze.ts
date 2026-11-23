@@ -1,3 +1,4 @@
+import { checkBalanceContinuity } from './balances';
 import { isModelGuess } from './clarify';
 import { pl } from './text';
 import { findRecurringObligations, isCounted } from './recurring';
@@ -92,6 +93,8 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
     }
     return missing;
   });
+  // Running balances must follow from the lines: a jump means a missing line or page.
+  const continuity = checkBalanceContinuity(accounts);
 
   // Funds: the latest known balance of each account, when the files carry balances.
   const latestBalances = accounts
@@ -221,18 +224,26 @@ export function analyze(accounts: Account[], pack: RulePack, inputs: UserInputs)
     }),
     statement_recency: () => {
       const limit = pack.freshnessDays ?? 45;
-      const status: CheckStatus = statementAgeDays > limit ? 'alert' : gaps.length ? 'watch' : 'ok';
+      const breaks = continuity.breaks;
+      const status: CheckStatus = statementAgeDays > limit ? 'alert' : gaps.length || breaks.length ? 'watch' : 'ok';
+      const breakText = breaks.length
+        ? `The balance on ${breaks
+            .slice(0, 2)
+            .map((b) => `${b.to} (${b.account})`)
+            .join(' and ')} does not follow from the lines before it: a line or a page may be missing.`
+        : '';
+      const balanceOk = continuity.checkedLines ? ` The running balance adds up on all ${continuity.checkedLines} lines checked.` : '';
       return {
         id: 'statement_recency',
         status,
         title: 'Recent and complete statements',
         detail:
           statementAgeDays > limit
-            ? `The last line is ${statementAgeDays} days old; statements must be dated within ${limit} days of the application. Download the latest ones.`
-            : gaps.length
-              ? `Missing: ${gaps.slice(0, 3).join('; ')}. Lenders want consecutive statements, every page.`
-              : `No missing month; the last line is ${pl(statementAgeDays, 'day')} old.`,
-        transactionIds: [],
+            ? `The last line is ${statementAgeDays} days old; statements must be dated within ${limit} days of the application. Download the latest ones.${breakText ? ` ${breakText}` : ''}`
+            : gaps.length || breaks.length
+              ? [gaps.length ? `Missing: ${gaps.slice(0, 3).join('; ')}.` : '', breakText, 'Lenders want consecutive statements, every page.'].filter(Boolean).join(' ')
+              : `No missing month; the last line is ${pl(statementAgeDays, 'day')} old.${balanceOk}`,
+        transactionIds: breaks.flatMap((b) => b.transactionIds),
       };
     },
     funds_to_close: () => {

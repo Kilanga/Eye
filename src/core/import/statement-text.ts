@@ -131,6 +131,7 @@ export function parseWithLayout(lines: PdfLine[], opts: StatementOptions, fallba
       continue;
     }
     let amount: number | null = null;
+    let balance: number | undefined;
     const label: string[] = [];
     for (const item of rest) {
       if (!isAmount(item.text)) {
@@ -140,9 +141,12 @@ export function parseWithLayout(lines: PdfLine[], opts: StatementOptions, fallba
       const v = parseAmount(item.text.replace(/\bcr\b/i, '').replace(/\bdr\b/i, ''));
       if (v === null) continue;
       const col = nearest(centre(item));
+      const signed = /\bcr\b/i.test(item.text) ? Math.abs(v) : /\bdr\b/i.test(item.text) ? -Math.abs(v) : v;
       if (col === 'debit') amount = -Math.abs(v);
       else if (col === 'credit') amount = Math.abs(v);
-      else if (col === 'amount') amount = /\bcr\b/i.test(item.text) ? Math.abs(v) : /\bdr\b/i.test(item.text) ? -Math.abs(v) : v;
+      else if (col === 'amount') amount = signed;
+      // Kept for the funds check and the running-balance check ("DR" means overdrawn).
+      else if (col === 'balance') balance = signed;
     }
     if (amount === null || label.length === 0) {
       unread++;
@@ -156,6 +160,7 @@ export function parseWithLayout(lines: PdfLine[], opts: StatementOptions, fallba
       currency: opts.currency,
       country: opts.country,
       rawLabel: label.join(' '),
+      ...(balance !== undefined ? { balance } : {}),
     };
     lastPage = line.page;
     out.push(last);
