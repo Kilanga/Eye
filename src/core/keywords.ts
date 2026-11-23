@@ -11,7 +11,8 @@ const RULES: { category: Category; pattern: RegExp; sign?: 'credit' | 'debit' }[
   { category: 'overdraft_fee', pattern: /\b(overdraft fee|od fee|overdraft charge|agios|interets debiteurs|frais de decouvert)\b/i, sign: 'debit' },
   { category: 'payday_loan', pattern: /\b(payday|cash advance loan|quick ?loan|pret express)\b/i },
   { category: 'gambling', pattern: /\b(casino|betting|sportsbook|poker|lottery|loterie|paris sportifs|pari sportif|turf|jeux d.argent)\b/i },
-  { category: 'bnpl', pattern: /\b(pay in 4|buy now pay later|bnpl|paiement en 3 fois|paiement en 4 fois|3x sans frais|4x sans frais)\b/i, sign: 'debit' },
+  // Instalment providers are named too: lenders now see these payments in bank data, so the applicant should first.
+  { category: 'bnpl', pattern: /\b(pay in [34]|buy now pay later|bnpl|paiement en [34] fois|[34]x sans frais|affirm|klarna|afterpay|sezzle|scalapay|oney|floa)\b/i, sign: 'debit' },
   { category: 'p2p_transfer', pattern: /\b(zelle|venmo|paypal|cash ?app|lydia|paylib|wero)\b/i },
   { category: 'cash_deposit', pattern: /\b(cash deposit|atm deposit|deposit cash|branch deposit cash|versement especes|depot especes|remise especes)\b/i, sign: 'credit' },
   { category: 'refund', pattern: /\b(refund|reversal|return credit|merchandise return|avoir|annulation)\b/i, sign: 'credit' },
