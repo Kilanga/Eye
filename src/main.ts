@@ -16,6 +16,7 @@ import {
   savePersonalRules,
   type PersonalRules,
 } from './core/clarify';
+import { eraseBrowserData } from './core/erase';
 import { clearSnapshot, compareSnapshots, loadSnapshot, saveSnapshot, takeSnapshot, type Comparison, type Snapshot } from './core/followup';
 import { importCsv } from './core/import/csv';
 import { importOfx } from './core/import/ofx';
@@ -1260,9 +1261,12 @@ $('#keep').addEventListener('change', (e) => {
   if ((e.target as HTMLInputElement).checked && state.previous) saveSnapshot(state.previous);
   if (!(e.target as HTMLInputElement).checked) clearSnapshot();
 });
-$('#erase').addEventListener('click', () => {
+$('#erase').addEventListener('click', async () => {
+  $<HTMLButtonElement>('#erase').disabled = true;
   clearSnapshot();
   clearPersonalRules();
+  // Also what Firebase and reCAPTCHA keep for this site, the offline copy and the service worker.
+  await eraseBrowserData();
   location.reload();
 });
 
