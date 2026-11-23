@@ -40,6 +40,12 @@ import { fitsDirection } from '../core/direction';
 import { validateModelItems, type StatementOptions } from '../core/import/statement-text';
 import { withOneRetry } from './retry';
 
+/** Languages the on-device sessions read (English and French statements) and write (English). */
+const ON_DEVICE_CREATE_OPTIONS = {
+  expectedInputs: [{ type: 'text' as const, languages: ['en', 'fr'] }],
+  expectedOutputs: [{ type: 'text' as const, languages: ['en'] }],
+};
+
 /** Lines per on-device call: the local context window is small (about 4k tokens in). */
 const BATCH_SIZE = 40;
 
@@ -81,10 +87,7 @@ export class HybridAI {
     this.settings = settings;
     const cloudModel = settings.cloudModel;
     const onDeviceParams = {
-      createOptions: {
-        expectedInputs: [{ type: 'text' as const, languages: ['en', 'fr'] }],
-        expectedOutputs: [{ type: 'text' as const, languages: ['en'] }],
-      },
+      createOptions: ON_DEVICE_CREATE_OPTIONS,
       promptOptions: { responseConstraint: classificationJsonSchema },
     };
     this.classifierLocal = getGenerativeModel(this.ai, {
@@ -151,10 +154,7 @@ export class HybridAI {
    */
   private pair(responseConstraint?: object, json = true): Record<DataOrigin, GenerativeModel> {
     const onDeviceParams = {
-      createOptions: {
-        expectedInputs: [{ type: 'text' as const, languages: ['en', 'fr'] }],
-        expectedOutputs: [{ type: 'text' as const, languages: ['en'] }],
-      },
+      createOptions: ON_DEVICE_CREATE_OPTIONS,
       ...(responseConstraint ? { promptOptions: { responseConstraint } } : {}),
     };
     const user = getGenerativeModel(this.ai, { mode: InferenceMode.ONLY_ON_DEVICE, onDeviceParams });
@@ -178,7 +178,9 @@ export class HybridAI {
     const lm = (globalThis as { LanguageModel?: { availability: (o?: object) => Promise<string> } }).LanguageModel;
     if (!lm) return 'no-api';
     try {
-      const s = await lm.availability({ expectedInputs: [{ type: 'text', languages: ['en', 'fr'] }] });
+      // Same options as the sessions the models create: without an output language Chrome logs a
+      // warning, and the answer could differ from the one for the sessions actually used.
+      const s = await lm.availability(ON_DEVICE_CREATE_OPTIONS);
       return (['available', 'downloadable', 'downloading'].includes(s) ? s : 'unavailable') as OnDeviceStatus;
     } catch {
       return 'unavailable';
