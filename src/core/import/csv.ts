@@ -1,5 +1,5 @@
 import type { CountryCode, Transaction } from '../types';
-import { normaliseHeader, parseAmount, parseDate } from './parse-utils';
+import { cleanLabel, normaliseHeader, parseAmount, parseDate } from './parse-utils';
 
 export interface ColumnMapping {
   date: number;
@@ -128,7 +128,7 @@ export function importCsv(text: string, opts: CsvImportOptions): CsvImportResult
   let skippedRows = 0;
   rows.slice(1).forEach((r, i) => {
     const date = parseDate(r[mapping.date] ?? '', opts.country);
-    const label = (r[mapping.label] ?? '').trim();
+    const label = cleanLabel(r[mapping.label] ?? '');
     let amount: number | null = null;
     if (mapping.amount !== undefined) {
       amount = parseAmount(r[mapping.amount] ?? '');

@@ -68,3 +68,30 @@ export function normaliseHeader(h: string): string {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
+
+/** Longest label kept, as for PDF lines: real statement labels are far shorter. */
+export const MAX_LABEL_LENGTH = 160;
+
+/**
+ * Cleans a label read from a file: control characters, line and tab breaks, and the invisible
+ * characters that reorder text (bidirectional overrides) become spaces; runs of spaces collapse.
+ * A label then stays on one line, so it can neither forge extra lines in an on-device prompt
+ * (lines are tab-separated, one per line) nor show other text on screen than what the bank wrote.
+ */
+export function cleanLabel(raw: string): string {
+  return raw
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_LABEL_LENGTH);
+}
+
+/** Largest statement file read, in bytes. A year of PDF statements is a few megabytes. */
+export const MAX_FILE_BYTES = 30 * 1024 * 1024;
+
+/** A plain reason when a file is too large to read in the tab, or null when it is fine. */
+export function fileTooLarge(bytes: number): string | null {
+  return bytes > MAX_FILE_BYTES
+    ? `this file is ${Math.round(bytes / 1024 / 1024)} MB; statements over ${MAX_FILE_BYTES / 1024 / 1024} MB are not read, so the tab does not freeze. Export fewer months per file.`
+    : null;
+}

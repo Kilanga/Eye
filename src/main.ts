@@ -19,6 +19,7 @@ import {
 import { clearSnapshot, compareSnapshots, loadSnapshot, saveSnapshot, takeSnapshot, type Comparison, type Snapshot } from './core/followup';
 import { importCsv } from './core/import/csv';
 import { importOfx } from './core/import/ofx';
+import { fileTooLarge } from './core/import/parse-utils';
 import { chunkLines, guessYear, lineText, parseWithLayout } from './core/import/statement-text';
 import { defaultQuestions, LOCAL_LETTER_TEMPLATE, templateExplanation, type Answer, type InterviewQuestion } from './core/interview';
 import { OutboundLedger } from './core/ledger';
@@ -869,6 +870,8 @@ async function importFile(file: File, i: number): Promise<Account> {
   const p = pack();
   const id = `user-${Date.now()}-${i}`;
   const opts = { accountId: id, currency: p.currency, country: state.country };
+  const tooLarge = fileTooLarge(file.size);
+  if (tooLarge) throw new Error(tooLarge);
   let transactions: Transaction[];
   if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
     const { readPdfInBrowser } = await import('./core/import/pdf');
