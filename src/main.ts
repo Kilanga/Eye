@@ -335,8 +335,8 @@ document.querySelector('#app')!.innerHTML = `
       </div>
       <p class="note">The cloud model is Google's Gemini API, reached through Firebase AI Logic, under the <a href="https://ai.google.dev/terms">Gemini API terms</a> and <a href="https://policies.google.com/privacy">Google's privacy policy</a>. On its free tier Google may use what it receives to improve its products, and asks developers not to send personal information: that is why, for your own statements, only whole numbers and check names ever leave this device, and only when you press a cloud button. Opening the page also contacts Google for reCAPTCHA, App Check and Firebase settings, with no statement data.</p>
       <details><summary>The exact summary, as it would be sent</summary><pre id="payload" tabindex="0">{}</pre></details>
-      <h3>Every request sent</h3>
-      <p class="note">Byte for byte, with where Firebase says the answer came from.</p>
+      <h3>Every request that can reach the cloud</h3>
+      <p class="note">Each model request that can be answered by Gemini in the cloud, with what it sends and where Firebase says the answer came from. Reading your own statements stays on Gemini Nano, so it is not listed; neither are the reCAPTCHA, App Check and Firebase settings requests.</p>
       <div class="scroll" tabindex="0" role="region" aria-label="Requests sent"><table class="ledger"><thead><tr><th scope="col">Time</th><th scope="col">What</th><th scope="col">Bytes</th><th scope="col">Answered by</th><th scope="col">Content</th></tr></thead><tbody id="ledger"></tbody></table></div>
       <div class="check-row" style="margin-top:1.25rem"><input type="checkbox" id="keep" /><label for="keep">Keep the summary (numbers and results, no statements) in this browser so the next review can compare</label></div>
       <div class="actions"><button type="button" class="btn secondary" id="erase">Erase everything from this browser</button></div>
